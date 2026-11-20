@@ -1,0 +1,13 @@
+# Original datasets
+/data/raw/
+
+# Generated analytical datasets
+/data/processed/
+
+# Python artifacts
+__pycache__/
+.venv/
+
+# Node artifacts
+node_modules/
+dist/
