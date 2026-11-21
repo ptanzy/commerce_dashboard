@@ -10,13 +10,13 @@ Desktop (>= 1100px):
 
 ```text
 +--------------------------------------------------------------------+
-| Delivery Intelligence             Olist historical source / about  |
+| Delivery Intelligence       Source / about     [Dark/Light toggle] |
 | [Purchase date] [Destination] [Category] [Seller] [Clear filters]  |
 | Active: [RJ x] [Health & Beauty x]                                 |
 +----------------+----------------+----------------+-----------------+
 | Orders         | On-time        | Median days    | Freight/price   |
 +----------------+----------------+----------------+-----------------+
-| Brazil destination map                 | Monthly trends              |
+| Brazil seller-origin map [Origin/Destination] | Monthly trends         |
 | metric switch + hover/click             | volume + performance        |
 +----------------------------------------+----------------------------+
 | Seller state -> customer state Sankey + measure/top-N controls       |
@@ -30,7 +30,7 @@ Tablet: primary charts stack; cards become 2 columns. Phone: cards 2 columns or 
 ## 3. Global UX
 
 - English interface with geographic names as commonly used in Brazil; BRL formatted with currency label.
-- Start with dataset's valid purchase-date extent, not fake live/last-30-day defaults.
+- Start with **all** available valid purchase dates (both ends of the actual source date extent), not fake live/last-30-day defaults.
 - Filters: purchase date from/to (inclusive), destination state, category, optional seller state. Show active chips with per-chip clear and a global reset. `All` is distinct from null/missing.
 - Exactly one source of truth for filter state; clicks can add/change filters but never maintain invisible chart-only subsets.
 - All KPIs/charts/tables share the current **order cohort**; item measures additionally use the matching-item subset.
@@ -43,12 +43,12 @@ P0 metrics: **distinct order count, on-time rate, median purchase-to-delivery da
 
 P1 comparison chips: same number of inclusive calendar days immediately preceding the selected purchase-date range, with the same non-date filters. Show `+ / -` and explicit comparison wording; if no previous data, show "No comparison data". Positive/negative interpretation differs by metric (lower median days is good, lower ratio generally favorable but only descriptive).
 
-## 5. Brazil destination choropleth (D3 Geo)
+## 5. Brazil origin/destination choropleth (D3 Geo)
 
 - Geography: 27 state regions using licensed, validated TopoJSON; tooltip includes full state name and code.
-- Default metric: eligible **distinct order volume** by destination state (count). Switch to on-time rate or median delivery days; each mode gets accurate legend, scale and denominator.
+- **Default geography: seller origin state**; allow toggle to customer destination state. The default metric is **distinct orders with at least one qualifying item from that seller state**, not summed distinct-order counts across states. Switch to on-time rate or median order delivery days for those state-specific cohorts. Each mode needs a matching denominator and legend. Destination mode uses distinct orders by customer state.
 - Low-volume states: for rate/duration metrics, show population sample count and consider hatch/neutral color for states below a documented threshold (e.g. 20 valid delivered orders); do not imply precision.
-- User action: click state to toggle destination filter; selected border and active chip reflect selection. Non-selectable zero-data regions remain visible and labeled.
+- User action: click a state to toggle the **seller-state filter in origin mode** or **customer-state filter in destination mode**; selected border and active chip identify the dimension. Selecting a different mode does not silently clear the previously selected other-dimension filter; show both chips. Non-selectable zero-data regions remain visible and labeled.
 - No individual delivery route lines by default. If origin-destination connections are later added, represent relationships only, not roads.
 - SVG responsive via `viewBox`; use D3 projection and geo path generators; React renders SVG state elements.
 
@@ -102,7 +102,7 @@ A Sankey link click dispatches two filter actions in one reducer action / batch 
 
 ## 10. Visual style
 
-Modern analytical SaaS visual language: readable typography, restrained neutral surfaces, high contrast, limited semantic colors, generous whitespace. Use visually consistent state/metric color coding; don't use red/green color alone to communicate performance. Design first for desktop capture at ~1440 px wide, but maintain basic mobile usability.
+Modern analytical SaaS visual language with **both dark and light themes**, dark first-visit default. Use semantic CSS variables for page background, cards, text, borders, focus ring, chart grid, SVG labels, sequential scales, and warning/success states. Provide a visible theme toggle in the header with accessible name and pressed/selected state. Persist preference in localStorage with a safe fallback; do not require OS-preference detection. Theme changes must not reset filters, scrolling, or selected records. Verify readable contrast, legible tooltips/legends, and meaningful chart color differentiation in both modes; never communicate a value only with red vs green. Design first for desktop capture at ~1440 px wide, but maintain mobile usability.
 
 ## 11. Accessibility and responsiveness
 

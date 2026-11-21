@@ -13,7 +13,7 @@ Trustworthy numbers and coordinated interactions are more important than animati
 | Selector tests | Vitest with fixture records | Category/seller/date cross-filter semantics, order vs item grain |
 | React component tests | React Testing Library | Filter chips, reset, table search/sort, empty states, keyboard controls |
 | Integration smoke | Playwright if feasible; otherwise manual documented script | Cross-chart filter interaction, tooltip/selection, order drill-through |
-| Build/deployment | `tsc`, Vite build, Pages preview | Public base path, assets, static export and route behavior |
+| Build/local preview | `tsc`, Vite build, Vite preview | Local base path, assets, static export and route behavior |
 
 ## 3. Required deterministic test fixtures
 
@@ -47,10 +47,11 @@ Use a small crafted fixture with >= 6 orders spanning multiple states, categorie
 ## 5. P0 integration acceptance walkthrough
 
 **A. Default state**
-- Open locally and on production static URL. Dashboard shows historical dataset title, correct date extent, four KPIs, Brazil map, trend, Sankey and order table. All legends and units are visible.
+- Open locally through Vite dev and production preview. Dashboard shows historical dataset title, the **full** valid purchase-date extent, four KPIs, **seller-origin default map**, trend, Sankey, order table and a dark/light toggle. All legends and units are visible.
 
-**B. Destination selection**
-- Click state `SP` on map. `SP` destination chip appears. KPI order count equals distinct order rows whose customer state is SP. Trend, flow graph and order table update. Clicking SP again or clearing its chip restores prior selection.
+**B. Origin selection and destination toggle**
+- In the **default seller-origin mode**, click `SP` on the map. A **seller-origin SP** chip appears; the KPI order count equals distinct orders with at least one qualifying item from a seller in SP. The order table, trend and Sankey reflect the same filtered cohort. Clicking SP again or clearing its chip restores the previous cohort.
+- Toggle to destination mode and click `RJ`. A **customer-destination RJ** chip appears. KPIs, map, trend and table reflect the AND of the selected seller-origin and customer-destination filters. Clear independently; ensure neither filter is mislabeled.
 
 **C. Category selection**
 - Choose translated English category. KPI order count equals distinct orders with >= 1 matching item. Freight ratio uses only matching item charges and item prices. Table displays distinct orders without duplicate IDs.
@@ -67,7 +68,8 @@ Use a small crafted fixture with >= 6 orders spanning multiple states, categorie
 **G. Missing/no data**
 - Apply impossible/empty cohort. All charts show appropriate empty states, financial ratio/on-time/median show `N/A` rather than `0%`/`NaN`, and clear filters works.
 
-**H. Compatibility and accessibility**
+**H. Theme, compatibility and accessibility**
+- Fresh load defaults to dark; light/dark toggle changes every styled UI and D3 chart element without altering the current filter cohort, and survives reload when localStorage is available. Both modes pass readable contrast/tooltip/legend inspection.
 - At desktop ~1440px and phone ~390px, content is readable and controls remain operable. Tab navigation reaches filters/table and visible chart equivalents. Chart color legends and tooltip data aren't color-only.
 
 ## 6. Performance gates (POC targets, measured on representative developer hardware)
@@ -90,7 +92,7 @@ Capture measured file sizes and timings in implementation notes; do not present 
 - [ ] Representative end-to-end P0 walkthrough passes.
 - [ ] Type-check, lint, and production build succeed.
 - [ ] Dashboard states no actual routes/carriers are tracked.
-- [ ] GitHub Pages deploy serves all static assets correctly.
-- [ ] README documents exact acquisition, transformation, build and hosting commands.
+- [ ] Local Vite dev and production preview serve all static assets correctly; no GitHub Pages deployment required.
+- [ ] README documents exact acquisition, transformation, local dev and production preview commands.
 
 **Optional, non-blocking:** Animated transitions, advanced brushing, previous-period comparisons, percentile overlays, exhaustive automated visual regression tests.

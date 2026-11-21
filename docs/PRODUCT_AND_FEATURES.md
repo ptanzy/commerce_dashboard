@@ -16,8 +16,8 @@ An analyst can select a purchase-date range, destination state, and product cate
 
 **P0 / required for completion**
 
-- Responsive dashboard shell with dataset/source/time-period identification.
-- Purchase-date range, customer/destination state, and product-category filters, with reset and visible active filters.
+- Responsive dashboard shell with dataset/source/time-period identification and **light/dark theme toggle (dark default)**.
+- Purchase-date range, customer/destination state, **seller-origin state**, and product-category filters, with reset and visible active filters. Default date range is **all available source history**.
 - Four KPI cards: distinct orders, on-time delivery percentage, median purchase-to-delivery days, freight/item value ratio. Non-delivered/unknown records excluded when appropriate.
 - Brazil state-level D3 geographic view with selectable destinations and delivery performance metric.
 - D3 Sankey with aggregated seller-state -> destination-state flows; links based on **item/order-seller contribution**, not actual routes.
@@ -62,7 +62,7 @@ An analyst can select a purchase-date range, destination state, and product cate
 
 **US-01 Overview.** Given no filters, display eligible totals and the purchase date extent. The app never implies its records are live.
 
-**US-02 Cross-filter.** When the user clicks a destination state on the map, the selected destination chip appears, KPIs/trend/table update, and the Sankey reflects the same cohort. Clicking again or clearing the chip restores the previous cohort.
+**US-02 Cross-filter.** On the default seller-origin map, clicking a seller state creates a labeled origin filter and updates KPIs, trends, table and Sankey for distinct orders with matching seller items. The origin/destination toggle switches the map dimension; a destination selection creates a separately labeled destination filter. Clearing either filter restores the appropriate previous cohort.
 
 **US-03 Product scope.** When the user selects a category, the cohort is **orders containing at least one matching item**; order counts and durations count each order once; item price and freight totals include **only matching items**. The UI labels this mixed scope wherever needed.
 
@@ -79,3 +79,11 @@ An analyst can select a purchase-date range, destination state, and product cate
 ## 6. Explicitly out of scope
 
 No role-based permissions, checkout, payments, inventory, carrier comparison, tracked package path, high-frequency live dashboard, custom user reports, or production data service. No assumption that Olist data represents Brazil's entire e-commerce market.
+
+## Locked design defaults (supersede earlier informal examples)
+
+- Themes: both light and dark are P0, with **dark as the first-visit default**; user can toggle without losing filters or selected records.
+- Hosting: **local-only** for the POC; the production build is tested with Vite preview, no publishing step.
+- Map: **seller origin** by default; **customer destination** available as a toggle. Map clicks apply the currently displayed dimension's filter.
+- Date: initialize to **all valid historical purchase dates**, not just 2018 or a recent window.
+- Default map counts are *distinct orders represented in each seller state's matching items*; a multiseller order may occur in multiple origin states, so individual state order counts are not additive to the overall order total.

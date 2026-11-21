@@ -23,12 +23,12 @@ Do not start application implementation before inspecting actual Olist inputs an
 **Goal:** Real, validated Olist-based data accessible in a browser with correct KPI outputs.
 
 - [ ] Initialize Vite React TypeScript, styling, testing and build tooling; lock dependencies.
-- [ ] Set GitHub Pages `base` and public asset paths correctly.
+- [ ] Configure Vite for local root (`/`) paths, local dev and production preview; do not create hosting workflows.
 - [ ] Implement `scripts/prepare_data.py` (DuckDB or Pandas for joins), output order/item facts, optional initial flow summary, location/state topology, and data manifest.
 - [ ] Add schema verification and a processing report (counts, nulls, unmatched foreign keys, translations, invalid geography, excluded dates).
 - [ ] Create explicit typed domain models and shared metric functions.
 - [ ] Implement static loader and no-data/error/loading UI.
-- [ ] Build shell, filter bar and four KPI cards with correct denominators.
+- [ ] Build shell, filter bar and four KPI cards with correct denominators; add dark-default/light-toggle theme tokens and persistence.
 - [ ] Tests for multi-item order arithmetic, date cutoff inclusion, missing outcomes and zero-denominator behavior.
 
 **Deliverable:** App runs locally, source data loads, and filtered KPI values are testably correct.
@@ -39,7 +39,7 @@ Do not start application implementation before inspecting actual Olist inputs an
 
 **Goal:** A polished linked analysis workflow.
 
-- [ ] Prepare validated Brazil states TopoJSON; build D3 choropleth with selectable state and alternate metric.
+- [ ] Prepare validated Brazil states TopoJSON; build D3 choropleth with **seller-origin default** and destination-mode toggle, appropriate filters and metric denominators.
 - [ ] Build monthly D3 trend chart with tooltips and simple date selection (brushing optional if available without delay).
 - [ ] Build `d3-sankey` with item contribution weights and top-N readability rule.
 - [ ] Implement TanStack Table explorer and detailed order panel.
@@ -50,7 +50,7 @@ Do not start application implementation before inspecting actual Olist inputs an
 
 **Stop rule:** Prefer fewer fully correct charts over cosmetic transitions or extra chart modes. If full-data Sankey is unreadable, cap to top-N, show displayed flow share and provide table drill-through.
 
-## Stage 3 — QA, polish, deployment
+## Stage 3 — QA, polish, local release
 
 **Goal:** Stable demo and credible handoff.
 
@@ -59,11 +59,11 @@ Do not start application implementation before inspecting actual Olist inputs an
 - [ ] Validate visual states (all, one state, one category, narrow dates, empty, missing).
 - [ ] Check desktop, tablet/mobile, keyboard controls and responsive chart sizing.
 - [ ] Confirm displayed metrics against independently computed data samples.
-- [ ] Test GitHub Pages path and all static data requests under `/commerce_dashboard/`.
-- [ ] Write concise setup, data acquisition, licensing, and deployment instructions in README.
+- [ ] Test local `npm run dev` and production `npm run preview` paths; verify all static data requests return successfully.
+- [ ] Write concise setup, data acquisition, licensing, and **local run/preview** instructions in README.
 - [ ] Tag or mark P0 accepted only after release gate in `TESTING_AND_ACCEPTANCE.md`.
 
-**Deliverable:** Buildable, documented and testable POC that can be hosted statically.
+**Deliverable:** Buildable, documented and testable **local** static POC (possible future hosting is out of scope).
 
 ## Dependency order
 
@@ -100,4 +100,4 @@ These are **logical checkpoints**, not mandatory separate Codex Work Units. They
 
 ## Definition of done
 
-The P0 workflows in `PRODUCT_AND_FEATURES.md` and `TESTING_AND_ACCEPTANCE.md` all pass; deployed/static build labels its data truthfully; code and docs are reproducible; remaining enhancement gaps are explicitly marked as non-blocking.
+The P0 workflows in `PRODUCT_AND_FEATURES.md` and `TESTING_AND_ACCEPTANCE.md` all pass; local production-preview build labels its data truthfully; code and docs are reproducible; remaining enhancement gaps are explicitly marked as non-blocking.

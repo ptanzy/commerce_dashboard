@@ -161,7 +161,7 @@ Financial totals use numeric BRL, rounded only for display. Reject nonfinite num
 - For geolocation, only retain plausible Brazil coordinates; choose median coordinates per (`prefix`, `state`) after outlier handling. Where a prefix has inconsistent states, report and avoid a silently ambiguous match.
 - Generate deterministic stable sort order and output checksums/manifest. The ETL must be idempotent for the same input; timestamp in metadata is permitted to vary separately from deterministic content.
 - Preserve full precision for calculations and format in UI.
-- Do not commit raw CSVs or any large processed record export until redistribution permission is established. GitHub Pages deployments are public.
+- Do not commit raw CSVs or any large processed record export until redistribution permission is established. The repository is public even though the POC runs locally.
 
 ## 7. Data discovery open questions (must resolve in first stage)
 
@@ -171,4 +171,4 @@ Financial totals use numeric BRL, rounded only for display. Reject nonfinite num
 - How many untranslated categories?
 - What is the runtime compressed size of full compact `orders.json` and `items.json`? Does lazy loading improve first interaction?
 - What exact TopoJSON source, license, and state code mapping will be used?
-- Are source dataset and derived public exports redistributable under their terms? If unclear, publish code + ETL and use an independently licensed demo fixture for GitHub Pages.
+- Are source dataset and derived exports redistributable under their terms? For this local-only POC keep source and unapproved processed data outside Git; assess public distribution only if hosting is later requested.

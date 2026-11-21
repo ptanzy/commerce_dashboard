@@ -24,14 +24,14 @@ flowchart TD
 | Concern | Choice | Reason |
 |---|---|---|
 | Language/UI | TypeScript, React, Vite | Type contracts, fast iteration, familiar portfolio stack |
-| Styling | Tailwind CSS | Rapid responsive layout; theme tokens via CSS variables |
+| Styling | Tailwind CSS + CSS semantic tokens | Light/dark switch with dark default, including SVG chart tokens |
 | Charts | D3 (`d3-scale`, `d3-shape`, `d3-array`, `d3-axis`, `d3-time-format` as needed) | Data-driven, custom linked charts |
 | Geographic chart | `d3-geo`, `topojson-client`, TopoJSON | Lightweight 27-state geometry, no heavyweight basemap |
 | Flow chart | `d3-sankey` | State-to-state weighted Sankey layout |
 | Tables | `@tanstack/react-table` | Headless sorting/pagination/filtering |
 | ETL | Python, DuckDB optional, Pandas optional | Reproducible joins, transformations, exports |
 | Testing | Vitest, React Testing Library, Playwright only if time allows | Data tests and focused UI flows |
-| Hosting | GitHub Pages (GitHub Actions) | Static deployment, no server fees |
+| Execution | Local Vite dev/preview | No deployment pipeline or production hosting in POC |
 
 Use stable compatible published versions at implementation time and commit a lockfile; do not hardcode unverified latest versions in documentation.
 
@@ -92,9 +92,11 @@ Avoid creating all folders before they're used. `data/raw/` must be gitignored. 
 - Lazy-load heavy order details if needed. Measure actual network transfer, heap and selector latency; only introduce Web Workers/Parquet-in-browser if testing exposes issues.
 - Keep potentially sensitive raw source files out of public repository; minimize source identifiers in distributed artifacts if legal review raises concerns.
 
-## 6. Deployment details
+## 6. Local execution and theming
 
-Configure Vite `base` for a project site path such as `/commerce_dashboard/` (or use a consistent relative base). Use `import.meta.env.BASE_URL` for fetch paths. A GitHub Actions workflow can run install, lint/type-check, tests, build, then deploy `dist/` to GitHub Pages. Do not configure an SPA route requiring server fallback; the dashboard is one browser route.
+Run with `npm run dev` for development and `npm run build` then `npm run preview` for build validation. Use the Vite default root-relative base (`/`) and construct static data URLs using `import.meta.env.BASE_URL`; never hardcode a GitHub Pages repository path. No hosting workflow is required.
+
+Apply a `data-theme="dark" | "light"` attribute to the document root and define semantic CSS custom properties for surfaces, text, borders, chart grids, color scales, and focus treatments. Tailwind styles should consume those variables. Dark is the first-visit default. The toolbar theme toggle changes the attribute and persists the selected theme to `localStorage` where available; handle storage access errors gracefully. Prevent an initial flash of the wrong theme if possible. All SVG charts should consume the same theme tokens and rerender legend/axis/text colors after theme changes. Theme affects presentation only, never filter data or analytics.
 
 ## 7. Contracts and design principles
 
@@ -103,4 +105,4 @@ Configure Vite `base` for a project site path such as `/commerce_dashboard/` (or
 - Missing values: nullable in types; exclude from relevant denominators, count missingness in validation report.
 - Provenance: data exports contain version, source filenames and timestamp range; never claim on-map arcs are roads.
 - Rendering: aggregate to states and monthly buckets before D3; no per-order geographic SVG marks.
-- Security: all static data and deployments are public; exclude PII and unnecessary free-text fields. Escape text content through React, no `dangerouslySetInnerHTML` for data.
+- Security: the local build's files are not automatically public, but the GitHub repository is public; keep raw/derived source data ignored until redistribution review. Exclude PII and unnecessary free-text fields. Escape text content through React, no `dangerouslySetInnerHTML` for data.

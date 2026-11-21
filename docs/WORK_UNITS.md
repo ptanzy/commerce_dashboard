@@ -30,13 +30,16 @@ Before creating, editing, installing, or executing anything:
 
 ## 1. Product in one paragraph
 
-Build a polished, **single-page, static React + TypeScript + D3** dashboard over the historical Olist Brazilian E-Commerce dataset, focused on order-to-delivery reliability and item-level freight charges. The page has KPI cards, geographic state map, seller-state → destination-state Sankey diagram, time-series trends, order explorer, and coordinated filtering. Use reproducible Python preprocessing, prebuilt static assets, no backend, and GitHub Pages deployment. Keep the POC achievable in approximately two focused development days by prioritizing correct, demonstrable interactions over animation or enterprise infrastructure.
+Build a polished, **single-page, static React + TypeScript + D3** dashboard over the historical Olist Brazilian E-Commerce dataset, focused on order-to-delivery reliability and item-level freight charges. The page has KPI cards, geographic state map, seller-state → destination-state Sankey diagram, time-series trends, order explorer, and coordinated filtering. Use reproducible Python preprocessing, prebuilt static assets, no backend, and **local-only execution**. Keep the POC achievable in approximately two focused development days by prioritizing correct, demonstrable interactions over animation or enterprise infrastructure.
 
 ## 2. Scope and dependency rules
 
 ### Required P0 behaviors
 - Data sourced from actual verified Olist CSV inputs, or from an **explicitly labeled fixture** when full data cannot be used or published.
 - Four KPI cards: distinct orders, on-time rate, median order-to-delivery duration, and freight-charge/item-price ratio.
+- **Both dark and light modes** with a visible accessible toggle, dark initial default and persisted preference.
+- **Seller-origin map default**, with customer-destination toggle; map clicks filter the displayed state dimension.
+- **All valid historical purchase dates** selected by default.
 - Shared date, destination state, product category filters and clearable selections.
 - D3 Brazil state choropleth, monthly trend chart, and bounded top-N `d3-sankey`.
 - TanStack Table-based searchable/sortable/paginated distinct-order explorer and record detail.
@@ -59,7 +62,7 @@ No carrier/GPS route tracking, delivery vehicle simulation, actual shipping-cost
 - Python + DuckDB for offline transforms; Pandas only if materially easier
 - Browser-readable preprocessed JSON / TopoJSON
 - Vitest + React Testing Library; Python tests/assertions; Playwright smoke test if feasible
-- Static GitHub Pages hosting; Vite `base` must be `/commerce_dashboard/`
+- Local Vite dev/build/preview; Vite `base` remains `/` for local paths; no GitHub Pages workflow
 
 Prefer D3 for geometry/layout and React for the SVG DOM; imperative D3 DOM mutations only when justified. Charts receive typed data/selection callbacks and **do not** independently define business metrics.
 
@@ -109,11 +112,11 @@ Every WU below has prerequisites, files/tasks, tests, and an **exit gate**. The 
 **Prerequisites:** WU-00 exit gate passed, or owner explicitly authorizes **fixture-only foundation** (must remain labeled fixture, not Olist analysis).
 
 **Actions**
-1. Scaffold Vite React/TS app with Tailwind, Vitest, D3, TanStack Table and proper GitHub Pages base path.
+1. Scaffold Vite React/TS app with Tailwind, Vitest, D3 and TanStack Table, configured for local Vite dev and preview (`base: '/'`).
 2. Create reproducible Python preprocessing under `scripts/` using DuckDB where useful.
 3. Produce typed `orders`, `items`, optional `geo-flows`, `locations`, `metadata`, and states topology according to `DATA_SPECIFICATION.md`. Preserve order/item grain.
 4. Commit **no raw Olist data by default**. Generated public assets only if data rights review allows; otherwise small clearly labeled synthetic fixtures plus instructions for private local generation.
-5. Implement typed browser loader, deterministic metric functions and selectors; create four KPIs, date/state/category filters, basic shell.
+5. Implement typed browser loader, deterministic metric functions and selectors; create four KPIs, date/state/category filters, basic shell and **dark-default light/dark theme switch** using semantic tokens and safe persistence.
 6. Add schema/reconciliation checks and deterministic multi-item/date-boundary fixtures.
 
 **Suggested files:** `package.json`, lockfile, `vite.config.ts`, `src/types/*`, `src/data/*`, `src/analytics/*`, `src/components/*`, `scripts/prepare_data.py`, `tests/*`, docs as needed.
@@ -127,7 +130,7 @@ Every WU below has prerequisites, files/tasks, tests, and an **exit gate**. The 
 **Prerequisites:** WU-01 accepted.
 
 **Actions**
-1. Render Brazil choropleth with real state codes, selectable metric, legend, keyboard-accessible state selection and tooltips.
+1. Render Brazil choropleth with real state codes, selectable metric, legend, keyboard-accessible state selection and tooltips. **Default to seller origins**, provide a destination toggle and bind map selection to the correct filter dimension.
 2. Build monthly order/delivery trend using D3 scales; ensure date filtering and percentage denominators match KPIs.
 3. Add `d3-sankey` for seller state → destination state item contributions, with bounded top-N and a displayed-share indicator.
 4. Route all chart interactions into a **single** shared filter model. Display removable filter chips and clear/reset.
@@ -137,7 +140,7 @@ Every WU below has prerequisites, files/tasks, tests, and an **exit gate**. The 
 
 **Exit gate:** State or category selection changes KPIs, map, trend, Sankey, and filters coherently. All map and Sankey claims are accurately labeled.
 
-### WU-03 — Order explorer, integration, QA and deployment
+### WU-03 — Order explorer, integration, QA and local acceptance
 
 **Prerequisites:** WU-02 accepted.
 
@@ -146,11 +149,11 @@ Every WU below has prerequisites, files/tasks, tests, and an **exit gate**. The 
 2. Add drill-through from aggregate visualizations to underlying **matching** order records.
 3. Check filters composition, cancellation/undelivered handling, missing translation, no matching orders, and repeated clear/select cycles.
 4. Run typecheck, lint if configured, unit/component tests, Python validation, and production build; add a reproducible E2E smoke checklist (Playwright if available).
-5. Check desktop and mobile layouts, keyboard navigation, contrast/labels, static asset URLs under `/commerce_dashboard/`.
-6. Update README with installation, raw data acquisition, transform commands, local run commands, publication caveats, and deployment process.
-7. Add GitHub Pages workflow only if authorized and supported; never enable new repository settings without approval.
+5. Check desktop/mobile layouts, keyboard navigation and **both themes** (including D3 SVG axes, legends, tooltips), static asset URLs in local dev and production preview.
+6. Update README with installation, raw data acquisition, transform commands, local run/preview commands, and public-repository data caveats.
+7. Do not add hosted deployment workflows or modify GitHub repository settings; deployment is not part of the POC.
 
-**Exit gate:** All required P0 walkthroughs in `TESTING_AND_ACCEPTANCE.md` pass, outstanding issues documented, and the build is ready for a PR/review. Do **not** claim deployed until actual published URL was checked.
+**Exit gate:** All required P0 walkthroughs in `TESTING_AND_ACCEPTANCE.md` pass, outstanding issues documented, and local Vite dev/build/preview are verified. No public deployment is required or claimed.
 
 ## 6. Cross-WU test and quality gate
 
