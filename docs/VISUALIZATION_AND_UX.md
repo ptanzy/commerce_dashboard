@@ -1,109 +1,68 @@
-# Visualization and UX Specification
+# Visualization and UX Specification — canonical POC v2
 
-## 1. Design objective
+## Information hierarchy
 
-The dashboard should answer a progression of questions: **How are we doing? -> Where is performance different? -> Which flows explain this? -> Which orders are involved?** Give the user one obvious interaction at a time rather than presenting a wall of unrelated charts.
+One responsive page answering: **How are deliveries performing? → Where do seller-origin and customer-destination patterns differ? → Which commodity flows contribute? → Which orders explain them?** Historical data only; no real-time tracking claim.
 
-## 2. Page layout
-
-Desktop (>= 1100px):
+Desktop wireframe (~1440px):
 
 ```text
-+--------------------------------------------------------------------+
-| Delivery Intelligence       Source / about     [Dark/Light toggle] |
-| [Purchase date] [Destination] [Category] [Seller] [Clear filters]  |
-| Active: [RJ x] [Health & Beauty x]                                 |
-+----------------+----------------+----------------+-----------------+
-| Orders         | On-time        | Median days    | Freight/price   |
-+----------------+----------------+----------------+-----------------+
-| Brazil seller-origin map [Origin/Destination] | Monthly trends         |
-| metric switch + hover/click             | volume + performance        |
-+----------------------------------------+----------------------------+
-| Seller state -> customer state Sankey + measure/top-N controls       |
-+--------------------------------------------------------------------+
-| Order explorer: search / sortable columns / pagination             |
-+--------------------------------------------------------------------+
+Delivery Intelligence                     [Data source] [Dark / Light]
+[Purchase range] [Customer state] [Seller state] [Category] [Reset]
+[Active chips: Origin SP ×] [Category Health Beauty ×]
+[Distinct orders] [On-time rate] [Median duration] [Freight/price]
+[Brazil states — Seller origins/Destinations] [Monthly order / punctuality trend]
+[Sankey: top 15 directed item-contribution flows, displayed share]
+[Order explorer: search, sort, 25/page]  [selected order details]
 ```
 
-Tablet: primary charts stack; cards become 2 columns. Phone: cards 2 columns or 1, filters in wrapped row, map/chart full width, Sankey uses horizontal scroll or simplified top-N list when layout cannot stay readable. Maintain accessible action targets.
+Tablet: stacked primary charts, 2-column cards. Phone (~390px): one-column layout, chart responsive width; Sankey may use a scrollable container or accessible compact ranked link list. Theme colors never replace textual status/labels. No elaborate animations or chart brushing for P0.
 
-## 3. Global UX
+## Global filters and navigation
 
-- English interface with geographic names as commonly used in Brazil; BRL formatted with currency label.
-- Start with **all** available valid purchase dates (both ends of the actual source date extent), not fake live/last-30-day defaults.
-- Filters: purchase date from/to (inclusive), destination state, category, optional seller state. Show active chips with per-chip clear and a global reset. `All` is distinct from null/missing.
-- Exactly one source of truth for filter state; clicks can add/change filters but never maintain invisible chart-only subsets.
-- All KPIs/charts/tables share the current **order cohort**; item measures additionally use the matching-item subset.
-- Clear loading and error state with retry; empty results should show "No orders match these filters" instead of `NaN` or zero rates.
-- Show source attribution: "Olist historical Brazilian e-commerce sample; commercial flows, not tracked delivery routes." Link to dataset source in About.
+- English interface, BRL currency, accurate date range derived from actual valid purchase dates. Default is unfiltered full history, seller-origin map mode, **dark** theme on first visit.
+- `Filters` and `FilterAction` are **exactly** as defined in `ARCHITECTURE.md`. App-level `useReducer` owns dates, customerState, sellerState, category. Active chips identify the field explicitly; clearing a single chip clears only that dimension. Show global reset.
+- Map mode/metric, trend metric and selected order-detail drawer are **presentation state**, not silent additional cohort filters.
+- Sankey link click dispatches `set_flow_pair` atomically (sets seller and customer states). No independent selected-link store. Both chips then appear; a single chip can be removed without clearing the other.
+- Keyboard-reachable chart alternatives: actionable state list and top-15 flow list, with accessible labels and focus indicators. Empty, loading and error states are required.
 
-## 4. KPI row
+## KPI cards
 
-P0 metrics: **distinct order count, on-time rate, median purchase-to-delivery days, freight charges / item price**. On hover or focus, show numerator/denominator and missingness handling. On-time rate and median are "N/A" if no eligible delivered orders; freight ratio "N/A" if total matched item price <=0. Never show 0% for absent denominator.
+P0: distinct eligible orders, on-time percentage (eligible delivered + estimated denominator shown in tooltip), median purchase-to-delivery **fractional days** (1 decimal UI), freight charges divided by matching item price (BRL/BRL ratio rendered %). Invalid/zero denominator = `N/A` not 0%. Numbers come **only from shared selectors**; do not duplicate formulas inside components. P1: previous equal-duration comparison, P95 and segmented freight analysis.
 
-P1 comparison chips: same number of inclusive calendar days immediately preceding the selected purchase-date range, with the same non-date filters. Show `+ / -` and explicit comparison wording; if no previous data, show "No comparison data". Positive/negative interpretation differs by metric (lower median days is good, lower ratio generally favorable but only descriptive).
+## Brazil choropleth (P0)
 
-## 5. Brazil origin/destination choropleth (D3 Geo)
+- Use attributed and mapped TopoJSON with **27** state polygons, each mapped to a UF code and display name. Validate source license. No GPS or actual route lines.
+- **Initial mode Seller origins.** Each state's count is distinct eligible orders having ≥1 matching item from that origin. A multiseller order can be counted in multiple origin states, so state totals do not add to the distinct national order KPI.
+- Toggle to **Customer destinations**: map grouped by customerState in eligible order cohort. Preserve existing seller and customer filters and show both chips.
+- P0 measure distinct orders only; alternative on-time rate and median performance measures are P1 to protect two-day deadline. For any P1 rate, deduplicate orders per state and disclose delivered eligible denominators. No hatching; muted neutral fill and N tooltip for low samples.
+- Click state to set/clear correct origin or destination constraint; tooltip shows dimension, UF/name, exact label, count, qualification and selected state. Zero data regions neutral with label; do not pretend absent data is a measured zero if sample lacks that state.
+- React renders paths using `d3-geo`; domain-calculated chart colors use theme semantic tokens, not hardcoded text colors.
 
-- Geography: 27 state regions using licensed, validated TopoJSON; tooltip includes full state name and code.
-- **Default geography: seller origin state**; allow toggle to customer destination state. The default metric is **distinct orders with at least one qualifying item from that seller state**, not summed distinct-order counts across states. Switch to on-time rate or median order delivery days for those state-specific cohorts. Each mode needs a matching denominator and legend. Destination mode uses distinct orders by customer state.
-- Low-volume states: for rate/duration metrics, show population sample count and consider hatch/neutral color for states below a documented threshold (e.g. 20 valid delivered orders); do not imply precision.
-- User action: click a state to toggle the **seller-state filter in origin mode** or **customer-state filter in destination mode**; selected border and active chip identify the dimension. Selecting a different mode does not silently clear the previously selected other-dimension filter; show both chips. Non-selectable zero-data regions remain visible and labeled.
-- No individual delivery route lines by default. If origin-destination connections are later added, represent relationships only, not roads.
-- SVG responsive via `viewBox`; use D3 projection and geo path generators; React renders SVG state elements.
+## Sankey chart (P0)
 
-## 6. D3 Sankey flow diagram
+- Two separate node sets (`origin:SP` and `dest:SP` even for the same state). **Intra-state SP→SP must remain** a valid flow.
+- Aggregate **matching item rows** into `(sellerState, customerState)` directed pairs. P0 weight = **item contribution count** only. Sort all pairs descending by count then stable UF-key tie-break; display **top 15 links**, with eligible-item-count coverage percentage and label `Top 15 seller→customer flows shown`.
+- No category/value/freight measure toggle P0; alternate measures P1. No artificial `Other` edge. Unknown state rows are included in overall item KPIs but excluded from mapped Sankey and counted/disclosed in the flow coverage/tooltip denominator decision (coverage relative to **mappable matched items**, and disclose unmappable count separately).
+- Tooltip: source/destination, item contributions, current filter scope and percent of mappable count; explicit `Commercial seller-to-customer relationship, not a physical route`.
+- Click link sets both fields atomically; click node may set only one state dimension. After filtering, clicking a different visible link replaces both state values.
 
-- Flow: seller state -> customer state **aggregated from item contributions**, not observed transportation legs.
-- Default weight: number of matching item rows (label "Item contributions"). Alternative: `freightChargeBRL` or `itemValueBRL`; these give additive meaningful weights. `distinctOrderCount` cannot be used for additive Sankey totals across multi-seller buckets without careful deduplication.
-- Default scope: top-N origin and destination states based on current weighted flow, with `Other` grouping only where it preserves link identity honestly; otherwise hide low-volume links with note "Top N shown" and display share of total.
-- All weights must be finite and non-negative; ensure zero-weight links are omitted. Avoid duplicate node IDs by namespacing `origin:SP` / `dest:SP`.
-- Tooltip: seller/destination states, selected weight, category/date filters, percentage of displayed eligible flow; explicit "origin-destination relationship, not physical route" note.
-- Click link: apply seller and customer state filters; selecting another replaces the pair. Provide visible clear. Selecting a node can apply the appropriate dimension only.
-- Reduced-motion preference disables or minimizes layout transitions.
+## Monthly trend (P0)
 
-## 7. Monthly trend chart
+- X-axis fixed to the dataset's **full valid historical purchase-month range**, even when active purchase-date range is a single month. This chart is the **temporal context view** and intentionally displays non-date-filter cohort values, with the active date selection highlighted and out-of-range months muted. Label this plainly in legend/tooltip.
+- Metric toggle P0: distinct purchases per month or on-time rate (eligible delivered with estimate) by **purchase month**; missing months = 0 purchases for counts, gap/`N/A` for undefined rates. Show small-N warnings on percent rates and sparse first/last partial months.
+- **Click a month** to replace the global purchase-date range with that whole calendar month; month click on another mark directly switches selection. Clear date chip restores all history. No drag-brushing P0. If a selected range spans several months, highlight each overlapping month; data outside selection remains visible in muted styling.
+- Use a scale of source-derived month keys (YYYY-MM); avoid browser UTC/local shifts. Resize via SVG viewBox and measured container if needed. No inconsistent metric calculations.
 
-- X-axis: month of purchase, sorted chronologically, labels `Jan 2018` (not browser-local date inference).
-- Mode A: distinct order volume by purchase month; Mode B: on-time rate by purchase month; P1 optional median and P95 duration lines.
-- Domain should include valid months across selected range; missing months render as zero volume for counts, missing data (gap) for rates/durations.
-- Brushing/selection: drag or pick a date range to set global purchase-date filter; include a "Clear date selection" affordance. A simple click-based month-range selector is an acceptable P0 fallback if brushing is complex.
-- Tooltips: month, population count, numerator/denominator where appropriate, formatted metric and global filters.
-- Chart must handle 1 month and zero-data cases without broken axis or division-by-zero.
+## Order Explorer and details (P0)
 
-## 8. Order explorer
+- TanStack Table with one row per eligible `orderId`; sort/search/paginate (25 rows default). Columns: order ID, purchase date, destination state, status, delivery class, fractional delivery days, **Matching item price**, **Matching freight charges**.
+- Matching item columns sum **only eligibleItems** for the order, respecting current seller/category filters. When no item rows or no valid monetary values, show `—` (distinct from known BRL 0). Do not label these numbers `Order total`.
+- Drawer shows full-order item list and optional **Full-order item totals**, clearly separated from active matching-item sums; highlight current matching items. Show unknown timestamps as `—`. No duplicate order rows.
+- A chart drill-through shows the matching eligible orders and consistent active chips; table rows sortable by date/duration/amount, deterministic ID tie-break.
 
-- Use TanStack Table: order ID, purchase date, customer state, status, delivery classification, purchase-to-delivery days, item price, charged freight.
-- Search by order ID; sorting by date, duration, amount; client-side pagination of current cohort (default 25 rows); deterministic tie-break by ID.
-- Clicking a row opens a side panel/inline detail containing order timestamps, destination, estimated versus actual delivery, classification, and associated items/seller states/categories. If category filter is active, mark matching items distinctly but allow viewing all original items.
-- Show `—` for unknown fields, not silently substitute zero.
-- Accessible labels on sorting controls and buttons, keyboard-openable details, focus management, visible focus rings.
+## Theme, accessibility and UX performance
 
-## 9. Chart integration contract
-
-```ts
-interface Filters {
-  purchaseDateFrom: string | null;
-  purchaseDateTo: string | null;
-  customerState: string | null;
-  sellerState: string | null;
-  category: string | null;
-}
-
-type FilterAction =
-  | { type: 'set_date_range'; from: string | null; to: string | null }
-  | { type: 'set_customer_state'; state: string | null }
-  | { type: 'set_seller_state'; state: string | null }
-  | { type: 'set_category'; category: string | null }
-  | { type: 'clear_all' };
-```
-
-A Sankey link click dispatches two filter actions in one reducer action / batch to avoid transient mismatches. No chart should mutate global SVG nodes outside React ownership or retain a second independent canonical filter state.
-
-## 10. Visual style
-
-Modern analytical SaaS visual language with **both dark and light themes**, dark first-visit default. Use semantic CSS variables for page background, cards, text, borders, focus ring, chart grid, SVG labels, sequential scales, and warning/success states. Provide a visible theme toggle in the header with accessible name and pressed/selected state. Persist preference in localStorage with a safe fallback; do not require OS-preference detection. Theme changes must not reset filters, scrolling, or selected records. Verify readable contrast, legible tooltips/legends, and meaningful chart color differentiation in both modes; never communicate a value only with red vs green. Design first for desktop capture at ~1440 px wide, but maintain mobile usability.
-
-## 11. Accessibility and responsiveness
-
-Keyboard access to all functional controls, focus outlines, descriptive SVG titles/accessible chart summaries, data-table alternative for critical chart values, readable legends, contrast checks, reduced-motion consideration. All charts need meaningful empty/error/loading states.
+- Both dark and light are P0. Use CSS custom properties/Tailwind tokens for surfaces, labels, grids, selection, warning and focus colors; header toggle persists chosen mode in localStorage with safe failure fallback, defaults dark, does not modify cohort. Verify axes, SVG labels, legends and tooltips in both.
+- Keyboard operability of filters, order table, and accessible equivalents for map/Sankey selection; visible focus indicators, chart text alternatives, tooltips that do not trap focus and reduced-motion support.
+- No browser screenshots may be claimed as inspected unless actually captured. Show loading/empty/error states with visible and actionable text.

@@ -1,69 +1,63 @@
-# Architecture Decisions, Risks and Open Questions
+# Architecture Decisions, Risks and Open Questions — revised after independent review
 
-## Decision register
+## Accepted decisions
 
-| ID | Decision | Why | Status |
-|---|---|---|---|
-| ADR-01 | React + TypeScript + Vite | Clear app engineering showcase with low setup | Accepted for POC |
-| ADR-02 | D3-based SVG visualizations | Custom chart and interaction skills; manageable at state-level scale | Accepted |
-| ADR-03 | Static offline-prepared analytical data | No API server or database runtime | Accepted |
-| ADR-04 | Python + DuckDB if joins are easier; Pandas is permitted | Flexible, readable deterministic ETL | Provisional pending data profile |
-| ADR-05 | One React-owned canonical filter state and selectors | Avoid conflicting metrics across charts | Accepted |
-| ADR-06 | Distinct order facts separate from item contribution facts | Prevents cardinality errors; supports category filtering | Accepted |
-| ADR-07 | Use D3 Geo with licensed TopoJSON for 27 Brazilian states | Small geography; no expensive map stack | Accepted pending source selection |
-| ADR-08 | TanStack Table for order explorer | Avoid building sorting/pagination from scratch | Accepted |
-| ADR-09 | Local-only Vite dev/build/preview | Avoid hosting overhead in two-day POC | Accepted (supersedes Pages) |
-| ADR-10 | No carrier/GPS/physical-route claims | Source doesn't support these attributes | Non-negotiable |
-| ADR-11 | Use on-time delivered-on-or-before estimated calendar **date** | Avoid midnight cutoff misclassification | Accepted |
-| ADR-12 | Treat source timestamps as source-local; document parsing | Avoid misleading viewer-timezone date shifts | Accepted |
-| ADR-13 | Prioritize P0 linked dashboard workflow over extra charts | Two-day target | Accepted |
-
-## Project risks
-
-| Risk | Impact | Mitigation |
+| ID | Decision | Rationale |
 |---|---|---|
-| Olist license/public redistribution unclear | Public repository must not contain unapproved full data exports | Review source terms before any Git commit of derived data; retain locally generated records untracked |
-| Too many source joins / repeated geolocation rows | Wrong counts and huge exports | Profile keys, make geo prefix lookup unique, assert reconciliation |
-| Orders contain several sellers/categories | KPI vs flow count conflict | Separate order and item grain; define explicit filter semantics and fixtures |
-| CSV timestamp quality and date-only promises | Wrong on-time and duration math | Normalize source-local timestamps; compare calendar dates for punctuality; report exclusions |
-| Map shapes/state codes not aligned | Incorrect choropleth | Validate 27-state identifier mapping, topology licensing, geographic summary totals |
-| Sankey visual clutter | Unreadable chart, performance problems | Top-N states/links, aggregate and state visible share |
-| Large JSON payload in browser | Slow first paint or memory growth | Compact exports, lazy-load detail, compress; profile before optimization |
-| Data source is historical | False real-time framing | Display years and historical attribution at all times |
-| Freight value misread as carrier expense | Misleading financial narrative | Label as "freight charges"; define numerator/denominator explicitly |
-| Ambitious extras crowd out P0 | Missed two-day goal | P0/P1/P2 prioritization, hard stop on optional features |
-| Local asset paths | Missing data when previewing built app | Use Vite base `/`, `import.meta.env.BASE_URL`, dev/preview smoke test |
+| ADR-01 | React + TypeScript + Vite static local SPA | Modern implementation, no backend |
+| ADR-02 | D3 layouts/scales with React-owned SVG | Strong interactive showcase, testable lifecycle |
+| ADR-03 | Python + **DuckDB only** for P0 ETL | Consistent SQL transforms and minimal dependencies |
+| ADR-04 | Explicit separate order/item grains and single metric engine | Prevent duplication and mixed-grain errors |
+| ADR-05 | Single `useReducer` filter state with `set_flow_pair`; no `selectedSankeyLink` | Atomic and consistent chart selections |
+| ADR-06 | 27-state TopoJSON + `d3-geo` | Correct complexity for state-level map |
+| ADR-07 | **Skip Olist geolocation CSV for P0** | ZIP has state codes in seller/customer tables; avoid huge unnecessary join |
+| ADR-08 | Compact `orders.json`, `items.json`, `metadata.json`; no `geo-flows.json` | Live client cross-filtering needs record-grain data |
+| ADR-09 | TanStack Table | Reliable search/sort/pagination without bespoke framework |
+| ADR-10 | Two themes, dark default, token-based CSS/localStorage | Small incremental complexity, stronger UX |
+| ADR-11 | Seller origins default, destination toggle; full historical date default | User requirements |
+| ADR-12 | Local dev and preview only, Vite base `/` | Avoid deployment configuration |
+| ADR-13 | Date comparison is **source calendar date**, not timestamp at midnight | Correct punctuality semantics |
+| ADR-14 | R-7 percentile on fractional elapsed days, display one decimal | Determinism across implementations |
+| ADR-15 | Trend X-domain fixed to all history; month selection highlights instead of collapsing | Keep navigation usable |
+| ADR-16 | Sankey P0 uses **top 15 directed links weighted by item count**, same-state flows retained | Readability and additive semantics |
+| ADR-17 | Theme/responsive checks while building charts; Playwright P1 | Avoid end-loaded QA and tool setup |
+| ADR-18 | Five bounded WUs, WU-00 through WU-04 | Smaller assignments, unchanged scope |
 
-## Open implementation questions (not blockers for documenting architecture)
+## Main risk register
 
-1. Are the exact seven CSVs available and sufficiently intact to run the whole analysis?
-2. Which Brazil-state TopoJSON file is properly licensed for redistribution?
-3. Before any future public deployment, can full transformed Olist rows be redistributed? Local-only execution does not authorize committing restricted files to public GitHub.
-4. How large are compact order/item exports, and should the order details lazy-load?
-5. What explicit business rule should apply to records with status `delivered` but an inconsistent or missing actual date? Proposed: exclude from duration/accuracy; report.
-6. Should the category filter permit multiple selected categories? **POC decision: one category at a time**; multi-select deferred.
-7. How should month selection interact with the global date range? **POC decision: replace active purchase-date range**, with a visible clear control.
+| Risk | Consequence | Mitigation / owner |
+|---|---|---|
+| Business dataset publication | Public Git history may violate redistribution conditions | Olist Kaggle currently labels CC BY-NC-SA 4.0; keep original and derived row-level data Git-ignored pending explicit distribution review |
+| Brazil topology license/ID mismatches | Missing state or incorrect map results | WU-00 pin actual file URL/version, inspect 27 features and 2-letter UF mapping; record provenance |
+| Mixed item/order grain | Wrong totals and mismatched table/KPIs | Dedicated eligibleOrderIds/eligibleItems selectors; deterministic multi-seller tests |
+| Incoherent dates | Distorted on-time and durations | Force unknown and exclude from denominators; show data quality counts |
+| Large browser payload | Slow initial load, GC pressure | Measure real sizes and query timings before optimization |
+| Selected month hides other months | Broken user navigation | Fixed full-history trend domain + highlighted selected interval |
+| Two themes increase contrast problems | Unreadable legends and charts | Semantic tokens and per-chart dark/light review in WU-03 |
+| Big WUs expand beyond two days | Missed POC timeline | Small 5-WU plan and strict P0/P1 separation |
+| Olist lacks GPS/carrier identity | Misleading geographic claims | Label commerce origin→destination relationships, not actual routes |
 
-## Research influences (patterns, not code dependencies)
+## Geographic source candidates (not yet approved)
 
-- [AfterShip](https://www.aftership.com/) — delivery performance, distribution and percentiles.
-- [ShipStation](https://www.shipstation.com/) — freight/shipping charge breakdowns.
-- [Shopify Analytics](https://help.shopify.com/en/manual/reports-and-analytics/shopify-reports) — KPI-first hierarchy, comparisons, drill-down navigation.
-- [Metabase](https://www.metabase.com/docs/latest/dashboards/introduction) — filter interactions and exploration of underlying records.
-- [Observable Framework](https://observablehq.com/framework/) — build-time data preparation and static data-driven sites.
-- [D3 documentation](https://d3js.org/) — data-driven charts and React-compatible functional scales/layouts.
-- [TanStack Table](https://tanstack.com/table/latest) — headless table state and sorting.
-- [Olist Kaggle source](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) — original historical dataset.
+- [Brazilian States TopoJSON gist](https://gist.github.com/ppKrauss/0c33364240e841fa23e78b21005f792c): appears to use 2-letter UF `id` for 27 regions. **License/attribution must be confirmed at WU-00; do not imply automatically cleared for use.**
+- [topojson-brasil](https://github.com/marcelodeandrade/topojson-brasil): alternate topology; may use **numeric IBGE UF codes**, requiring an explicit code-to-two-letter-UF map. Confirm repository asset scope and license before adoption.
 
-All brand examples are functional inspiration; no proprietary visual assets, source code or undocumented architecture claims are required.
+Choose exactly one source at WU-00 and save `sourceURL`, version/commit, license evidence, feature identifier mapping and checksum to `docs/DATA_PROVENANCE.md`.
 
-## Additional accepted design decisions — November 2026
+## Unresolved items to verify, not permission for feature expansion
 
-| ID | Decision | Why | Status |
-|---|---|---|---|
-| ADR-14 | Support both light and dark themes; dark default; toggle with localStorage persistence | Minimal incremental cost with semantic tokens; stronger UI demonstration | Accepted, P0 |
-| ADR-15 | Seller-origin map is the first view; destination is optional toggle within P0 | Explicit owner preference, clearer supplier-side exploration | Accepted |
-| ADR-16 | Default to all valid historical purchase dates | Avoid arbitrary truncation; preserve provenance | Accepted |
-| ADR-17 | No GitHub Pages, CI deployment or public hosting in POC | Local-only owner preference | Accepted |
+1. Actual local Olist ZIP file inventory, input exceptions, valid join counts, invalid dates, untranslated categories.
+2. True compressed/uncompressed output sizes and selector latency (no measured evidence yet).
+3. Actual topology rights and mapping; must have 27 shapes/unique codes.
+4. Whether customer-facing published Olist-derived assets are approved; **local-only POC may proceed with ignored outputs**, but public redistribution requires its own approval.
+5. Any data-source anomalies that demand explicit exclusion rules; record them in `DATA_PROFILE.md` before modifying the canonical contract.
 
-The original draft references to destination-default geography, GitHub Pages, or one-theme-only design are superseded by ADR-14–17. Report future hosting as a separate feature proposal rather than an implementation requirement.
+## Research influences (no proprietary code reuse)
+
+- [Olist Kaggle dataset and license](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) — historical records, CC BY-NC-SA 4.0 listing.
+- [AfterShip](https://www.aftership.com/) — delivery performance/percentile information hierarchy.
+- [ShipStation](https://www.shipstation.com/) — freight charge breakdowns (not carrier operating costs).
+- [Shopify Analytics](https://help.shopify.com/en/manual/reports-and-analytics/shopify-reports) — KPI-first dashboard structure.
+- [Metabase](https://www.metabase.com/docs/latest/dashboards/introduction) — cross-filter and drill-through conventions.
+- [Observable Framework](https://observablehq.com/framework/) — build-time transforms for static sites.
+- [D3](https://d3js.org/) and [TanStack Table](https://tanstack.com/table/latest) — implemented interaction libraries.

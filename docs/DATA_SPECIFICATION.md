@@ -1,64 +1,51 @@
-# Olist Data Specification and Analytical Semantics
+# Data Specification — canonical POC v2
 
-> This is a **design contract based on the published Olist schema**. It is not a completed inspection of the actual downloaded CSV files. First implementation work must profile actual files and adjust documented assumptions before processing.
+This is the normative data contract for WU-00 through WU-04. **Do not confuse published schema assumptions with validated observations:** WU-00 must profile the user's actual local `data/raw/olist.zip` and record observed counts/exceptions. An earlier chat-level count is not a substitute for reproducible local profiling.
 
-## 1. Source inputs
+## 1. Input files and scope
 
-| Source CSV | Important fields | Use |
-|---|---|---|
-| `olist_orders_dataset.csv` | `order_id`, `customer_id`, `order_status`, `order_purchase_timestamp`, `order_delivered_customer_date`, `order_estimated_delivery_date`, `order_approved_at`, `order_delivered_carrier_date` | Purchase/delivery milestones; order grain |
-| `olist_order_items_dataset.csv` | `order_id`, `order_item_id`, `product_id`, `seller_id`, `shipping_limit_date`, `price`, `freight_value` | Item grain; seller links; charges |
-| `olist_customers_dataset.csv` | `customer_id`, `customer_unique_id`, `customer_zip_code_prefix`, `customer_city`, `customer_state` | Order destination region |
-| `olist_sellers_dataset.csv` | `seller_id`, `seller_zip_code_prefix`, `seller_city`, `seller_state` | Item seller origin region |
-| `olist_products_dataset.csv` | `product_id`, `product_category_name`, optional dimensions and weight | Category join |
-| `product_category_name_translation.csv` | `product_category_name`, `product_category_name_english` | English names |
-| `olist_geolocation_dataset.csv` | `geolocation_zip_code_prefix`, `geolocation_lat`, `geolocation_lng`, `geolocation_city`, `geolocation_state` | Optional approximate location centroids |
+**Required for P0** (six CSVs inside `data/raw/olist.zip` or extracted in `data/raw/`):
 
-`olist_order_payments_dataset.csv` and `olist_order_reviews_dataset.csv` are not required for this POC. Do not infer actual shipping cost, carrier, vehicle location, or travel path from these files.
+| File | Join/fields |
+|---|---|
+| `olist_orders_dataset.csv` | `order_id`, `customer_id`, `order_status`, `order_purchase_timestamp`, `order_delivered_customer_date`, `order_estimated_delivery_date` |
+| `olist_order_items_dataset.csv` | `order_id`, `order_item_id`, `product_id`, `seller_id`, `price`, `freight_value` |
+| `olist_customers_dataset.csv` | `customer_id`, `customer_state` |
+| `olist_sellers_dataset.csv` | `seller_id`, `seller_state` |
+| `olist_products_dataset.csv` | `product_id`, `product_category_name` |
+| `product_category_name_translation.csv` | `product_category_name`, `product_category_name_english` |
 
-## 2. Relationship cardinality
+**Not required for P0:** `olist_geolocation_dataset.csv` (no postal prefix coordinates required for state choropleth), payments, reviews, additional order approval/carrier milestones. Do not perform the million-row geolocation join. The 27 state polygons come from a separately validated and licensed TopoJSON asset.
 
-```mermaid
- erDiagram
-   ORDERS ||--o{ ORDER_ITEMS : contains
-   CUSTOMERS ||--o{ ORDERS : places
-   PRODUCTS ||--o{ ORDER_ITEMS : identifies
-   SELLERS ||--o{ ORDER_ITEMS : fulfills
-   PRODUCTS }o--o| CATEGORY_TRANSLATIONS : category
-   GEO_PREFIX ||--o{ CUSTOMERS : approximates
-   GEO_PREFIX ||--o{ SELLERS : approximates
-```
+**Relationships:** order `order_id` unique; item key (`order_id`, `order_item_id`) unique; customer join uses `customer_id` (not `customer_unique_id`); one order may have many sellers and categories; seller state belongs to the **item** not the order. Profile and count missing joins; do not silently duplicate order records.
 
-- `orders.order_id` is unique in the source order table; order items are unique by (`order_id`, `order_item_id`).
-- `orders.customer_id` joins customers' **order-specific** `customer_id`, not the cross-order `customer_unique_id`.
-- One order can contain several items and several sellers; **never sum an order metric over item joins**.
-- Geolocation prefixes appear many times. Aggregate coordinates once per prefix/state before joining (and validate state disambiguation); joining raw geolocation rows directly causes a many-to-many explosion.
+## 2. Runtime exports
 
-## 3. Export model (contract v1)
+All record exports are generated offline and stay Git-ignored unless publication rights are specifically approved. Use compact camelCase JSON with meaningful types. `schemaVersion` and `processingVersion` must be present in manifest. Do not persist PII, customer names, addresses, city strings or unnecessary timestamps.
 
-### `orders.json` — order grain
+### `orders.json` — exactly one row per order
 
 ```ts
+type DeliveryClassification = 'early' | 'on_time' | 'late' | 'unknown';
 interface OrderFact {
   orderId: string;
-  customerState: string | null; // 2-letter Brazilian state code
-  customerCity: string | null;
-  purchaseDate: string | null; // YYYY-MM-DD from source timestamp
-  purchaseTimestamp: string | null; // normalized source-local timestamp, no implied UTC
-  estimatedDeliveryDate: string | null; // YYYY-MM-DD
-  deliveredDate: string | null; // YYYY-MM-DD
+  customerState: string | null; // UF code
+  purchaseDate: string | null; // YYYY-MM-DD in source calendar
+  purchaseTimestamp: string | null; // source-local normalized ISO-like string; no Z
+  estimatedDeliveryDate: string | null;
+  deliveredDate: string | null;
   deliveredTimestamp: string | null;
   status: string;
-  deliveryDays: number | null; // elapsed duration; purchase-to-delivery
-  deliveryDayDelta: number | null; // calendar date(actual) - date(estimated)
-  deliveryClassification: 'early' | 'on_time' | 'late' | 'unknown';
-  itemCount: number;
-  itemPriceTotalBRL: number;
-  freightChargeTotalBRL: number;
+  deliveryDays: number | null;  // fractional days, NOT rounded at export
+  deliveryDayDelta: number | null; // actual calendar day - promised day
+  deliveryClassification: DeliveryClassification;
+  itemCount: number; // associated item rows, may be 0
 }
 ```
 
-### `items.json` — one order-item contribution
+Do **not** store unqualified order-level `itemPriceTotalBRL` or `freightChargeTotalBRL`. Their meanings change when seller/category item filters are active. Compute **matched-item** totals in selectors; details may separately label **full-order** totals.
+
+### `items.json` — exactly one row per original item contribution
 
 ```ts
 interface ItemFact {
@@ -67,108 +54,89 @@ interface ItemFact {
   sellerId: string;
   sellerState: string | null;
   customerState: string | null;
-  category: string; // translated, or explicit Unknown/Untranslated value
-  priceBRL: number;
-  freightChargeBRL: number;
+  category: string;       // stable key (prefer English snake_case)
+  priceBRL: number | null;
+  freightChargeBRL: number | null;
 }
 ```
 
-No unnecessary product descriptions or PII should be published. Order IDs may be hashed or masked for public static distribution if source terms and privacy review warrant it, but the join key must remain stable.
-
-### `geo-flows.json` — optional default-view optimization
-
-A static preaggregation for fast first render, **not a substitute for item records under arbitrary filters**.
-
-```ts
-interface FlowAggregate {
-  sellerState: string;
-  customerState: string;
-  category: string;
-  itemCount: number;
-  itemValueBRL: number;
-  freightChargeBRL: number;
-  distinctOrderCount: number; // distinct within this exact bucket ONLY
-}
-```
-
-Do not sum bucket `distinctOrderCount` across categories or sellers to calculate total unique orders: a single order can appear in multiple buckets.
-
-### `locations.json` and `brazil-states.topojson`
-
-`locations.json` holds state codes, display names, and optional centroids (state centroid is preferred to unreliable post-code means for state-level drawing). The simplified licensed/reusable Brazil states topology uses the same 27 codes; validate all codes and shapes before build.
+Use `null` for unavailable/invalid financial values; do not silently substitute zero. Report invalid amounts and exclusions. For category filtering use the stable `category` key; UI uses a deterministic formatter that replaces `_` with spaces and title-cases words (e.g., `health_beauty` → `Health Beauty`, optionally a short explicit exception dictionary for familiar labels). Missing/unknown source category maps to `unknown`; untranslated Portuguese categories use `untranslated:<original_key>` as a stable key, with a readable `Untranslated: ...` UI label. Category filter values must be IDs/keys, not display labels.
 
 ### `metadata.json`
 
 ```ts
 interface DataManifest {
-  schemaVersion: 1;
-  sourceName: string;
+  schemaVersion: 2;
+  sourceName: 'Olist Brazilian E-Commerce';
   sourceFiles: string[];
-  generatedAt: string;
+  processingVersion: string;
   purchaseDateMin: string | null;
   purchaseDateMax: string | null;
-  orders: number;
-  items: number;
-  exclusions: Record<string, number>;
-  processingVersion: string;
+  orderCount: number;
+  itemCount: number;
+  unmatchedJoinCounts: Record<string, number>;
+  invalidCounts: Record<string, number>;
+  provenance: string;
   sampleMode: boolean;
-  notes: string[];
 }
 ```
 
-## 4. Canonical filtering semantics
+`public/geo/brazil-states.topojson` is a separate state-boundary asset. **No `geo-flows.json` or `locations.json` is required for P0.** Source-derived records and metadata may remain only in local ignored `public/data/`. Add `/public/data/` to the repository `.gitignore` before generating outputs; `data/raw/` and `data/processed/` should also be ignored. If P0 asset size/latency is problematic, benchmark and document before changing these contracts.
 
-**Scope filters:** purchase date range is inclusive (`YYYY-MM-DD`), customer destination state, optional seller state, and English product category. Multiple filters combine with logical AND. Seller/category filters are evaluated on **item rows**, but orders are selected by existence of at least one qualifying item.
+## 3. Canonical filters and data cohorts
 
-Algorithm:
+`Filters` and actions are defined once in `ARCHITECTURE.md`. Purchase dates are inclusive; an unset range includes **all records with valid purchase dates**. Dates are parsed as source calendar values rather than viewer timezone conversions. All active dimension filters combine with AND.
 
-1. `dateEligibleOrders` = orders with purchase date within selected range and (if selected) matching customer state.
-2. `matchingItems` = item records linked to `dateEligibleOrders` and matching seller state/category criteria.
-3. `eligibleOrderIDs` = distinct order IDs of `matchingItems`; if no item filters are selected, use `dateEligibleOrders` (including records without item rows, clearly marked if present).
-4. **Order-level KPIs and delivery trend** calculate once per `eligibleOrderIDs`.
-5. **Item-level freight/value and Sankey** use `matchingItems` for those `eligibleOrderIDs`; if no item filters, all linked item contributions.
-6. **Map** counts destination orders **distinctly**, and delivery rates by order; use the current eligible orders. Sankey link metrics reflect matching item contributions, not unique journeys.
-7. **Order explorer** lists distinct eligible orders and allows expanding all items or just matched items with an explicit view toggle.
+1. `baseOrders`: purchase-date-eligible orders, plus selected customer-state constraint.
+2. `matchedItems`: items whose `orderId` belongs to `baseOrders`, and that satisfy **both** active seller-state and category filters, if set.
+3. `eligibleOrderIds`: if seller or category filter is active, distinct IDs from `matchedItems`; otherwise every ID from `baseOrders`, including orders with zero item rows.
+4. `eligibleOrders`: one order record for each eligible ID; **all order-based KPIs** and order table rows derive from this set, once per ID.
+5. `eligibleItems`: `matchedItems` restricted to eligibleOrderIds; **item-level** metrics and Sankey use these rows, never all items of eligible orders when a seller/category filter is active.
+6. **Map origin mode:** for each seller state, distinct order IDs represented by `eligibleItems` originating there. An order with items from two seller states may contribute to both state buckets but only once to overall orders. For origin performance metrics, calculate delivered eligible orders **having at least one matched item in that state**, deduplicated per state. **Map destination mode:** distinct eligible orders grouped by customerState.
+7. **Order explorer:** distinct eligible orders; item price/freight columns are sums over `eligibleItems` linked to that order and labeled **Matching items: price / freight**. Full-order items and full-order totals can be displayed separately in details, clearly distinguished.
+8. **Sankey link:** seller-state -> customer-state item-level contributions. A link click applies `set_flow_pair` atomically. Never model it as actual delivery route.
 
-**Cross-filtering special case:** when a Sankey link is clicked, seller state and customer state become filters. A clicked link's item set must be the same set underlying the Sankey and corresponding order drill-through. Don't allow component-specific hidden filters.
+**Subtlety:** if no item filter is applied, an order with zero items may appear in the order table and order KPIs but contributes nothing to item freight/Sankey/origin map. In order table show `—` for item price/freight when no item records, **not** an invented BRL 0. Use `0` item count when known. A subset of orders with zero items is therefore valid even if no origin state can be determined.
 
-### Crucial product-filter example
+**Example:** One order with electronics items from SP and furniture from RJ, customer MG. Filter electronics → one order, only SP matching items/charges, one Sankey SP→MG link. Filter furniture → same one order, only RJ matching items/charges. Filter none → one KPI order but both link contributions.
 
-Order X contains two electronics items from seller SP and one furniture item from seller RJ, all shipping to customer MG. Selecting electronics yields **one** order, **two** matching item contributions, and the sum of electronics freight/price only. Selecting furniture yields **one** order and the RJ->MG flow. Selecting all categories yields **one** order for KPI totals; the Sankey can include both SP->MG and RJ->MG links.
+## 4. Metric definitions
 
-## 5. Canonical metric definitions
+| Metric | Exact rule |
+|---|---|
+| Distinct orders | `eligibleOrders.length` (valid purchase-date requirement) |
+| Delivered duration eligible | `status === 'delivered'`, valid purchase and delivered timestamps, `deliveryDays >= 0` |
+| On-time eligible | Delivered duration eligible **and** valid estimated delivery calendar date |
+| On-time rate | `actual calendar date <= estimated calendar date` / count on-time eligible; `N/A` if denominator zero |
+| Classification | `early` if actual date < estimated date; `on_time` if same; `late` if after; `unknown` unless duration/coherence + valid estimate satisfy eligibility |
+| Duration | `(deliveredTimestamp - purchaseTimestamp)/86_400_000` **fractional days** from source-naive normalized timestamps; null if negative or invalid |
+| Median/P95 | R-7 linear interpolation: position `(n-1)*p` in sorted valid durations, interpolate adjacent observations; matches `d3.quantileSorted` and continuous percentiles; round to one decimal **only for UI** |
+| Date delta | integer actual source calendar day minus estimated source calendar day; null for unknown/incoherent |
+| Freight ratio | `sum(valid eligibleItems.freightChargeBRL) / sum(valid eligibleItems.priceBRL)`; `N/A` if eligible price sum <= 0; count/reveal excluded invalid amounts |
+| Monthly volume | Distinct eligible orders grouped by **purchase month** |
+| Monthly on-time | On-time rate over delivered-and-estimate-eligible purchase-month cohort; flag small denominators |
 
-| Metric | Numerator / calculation | Population / denominator | Notes |
-|---|---|---|---|
-| Total orders | Count unique order IDs | Eligible orders with valid ID, optional purchase date range eligibility | State clearly if no date excludes unparseable dates |
-| Delivered eligible | Count orders with status `delivered` and valid purchase + actual delivery timestamps | Eligible orders | Valid durations must be >= 0 |
-| On-time rate | Count delivered eligible with actual **calendar date** <= estimated **calendar date** | Delivered eligible with valid estimated date | Inclusive estimated delivery *day*, not midnight timestamp comparison |
-| Delivery duration | `(delivered_customer - purchase_timestamp)` in days | Delivered orders with valid coherent timestamps | It is **purchase-to-delivery**, not carrier transit |
-| Median / P95 | Exact percentile over valid `deliveryDays` | Same valid delivered cohort | Define percentile interpolation in `metrics.ts` and replicate in ETL tests |
-| Early/on-time/late | Actual date <, =, > estimated date | Delivered with valid actual + estimate | If comparing estimated date directly, late is date after estimate |
-| Freight ratio | `sum(item.freight_value) / sum(item.price)` | Eligible matching items with valid amounts; denominator > 0 | BRL charged to customers, **not logistics costs** |
-| Average freight/order | `sum(item.freight_value) / distinct eligible orders` | Eligible cohort; label whether empty-item orders are included | Prefer no ambiguous presentation initially |
-| Monthly volume | Distinct orders grouped by purchase month | Eligible orders with valid purchase date | Historical purchase cohorts |
-| Trend punctuality | On-time rate of eligible delivered orders grouped by **purchase month** | Estimated/actual valid delivered orders in that month | May have a small cohort right edge; disclose |
+For a delivered order with delivery before purchase, **force `deliveryDays=null`, `deliveryDayDelta=null`, `deliveryClassification='unknown'`** and exclude from both duration and on-time calculations. Date-only estimated delivery is inclusive through end of calendar day. Missing financial values are not cast to zero and must be counted; positive sums use valid rows only with disclosure in profiling/tooltip. Money is customer **freight charged**, not actual logistics cost. Use BRL. Source Olist timestamps contain no timezone offsets; parse consistently as source-naive values without appending or inventing `Z`.
 
-Financial totals use numeric BRL, rounded only for display. Reject nonfinite numeric values; don't silently turn null into zero. `deliveryDayDelta` may be negative, zero, positive; missing estimated or actual yields unknown. Distinguish **late** (> estimated calendar date) from **delayed shipping milestone** (not reliably supported).
+## 5. Sankey, trend, and map aggregation
 
-## 6. ETL and validation
+- Sankey P0 is **item contribution count**. Aggregate all matching item rows into directed `(sellerState, customerState)` links, including `SP→SP` with **distinct origin:SP and destination:SP node IDs**. Sort descending by weight, take **top 15 directed links**; show `% of total eligible item-link weight displayed`; no `Other` synthetic link. P1 weight toggle may offer total valid freight or item price (must use corresponding measure/denominator).
+- Map uses all 27 Brazilian UF state polygons, with two-letter UF identifier mapping validated; non-active states neutral. P0 metric distinct order count per state; P1 rate/duration metrics only if time. States with low denominator show explicit N in tooltip and neutral/muted warning when appropriate; no hatching required.
+- **Trend chart domain:** X-axis remains anchored to all valid historical purchase months (or the same pre-date-filter context) even when a month/date filter is selected. Bars/lines show counts for the non-date-filter cohort with selected date interval highlighted, and values outside date selection rendered muted. **KPI/table/map/Sankey** use current full filter cohort. Trend tooltips must disclose contextual scope. This exception prevents a month click from collapsing the chart to one point. Clicking a month replaces the selected date range with that calendar month (can click a new month directly); explicit clear restores all history. P0 click-to-select only; no brush interaction.
+- Sparse first/last months and low-population state rate estimates display count/denominator and a low-N indicator; do not interpret 0 or 100% from one observation as stable performance.
 
-- Inspect file count, column names, row counts, uniqueness, null percentages, status frequencies, timestamp ranges, and expected joins **before** writing transformation code.
-- Validate all CSV input schemas and per-file key uniqueness expectations. Duplicate order/item keys, unparseable money, malformed state codes, negative prices/freight, and impossible dates must be counted and surfaced.
-- Join category translation by Portuguese category, fall back deterministically to source category or `Unknown`; never invent translations.
-- For geolocation, only retain plausible Brazil coordinates; choose median coordinates per (`prefix`, `state`) after outlier handling. Where a prefix has inconsistent states, report and avoid a silently ambiguous match.
-- Generate deterministic stable sort order and output checksums/manifest. The ETL must be idempotent for the same input; timestamp in metadata is permitted to vary separately from deterministic content.
-- Preserve full precision for calculations and format in UI.
-- Do not commit raw CSVs or any large processed record export until redistribution permission is established. The repository is public even though the POC runs locally.
+## 6. ETL procedure and validation
 
-## 7. Data discovery open questions (must resolve in first stage)
+1. Read directly from locally supplied ZIP/extracted CSVs, validate exact required columns, unique keys, row counts, null patterns, and referenced keys with DuckDB. Avoid joining raw 1M-row geolocation.
+2. Derive source-naive normalized dates/valid durations. Translate categories via English lookup; apply stable fallbacks. Only export needed columns.
+3. Build a **left-joined order-grain** export and **item-grain** export separately; never create a wide cross-product export.
+4. Validate order/item uniqueness, join accounting, 2-letter states, financial nulls, delivery coherence, totals, sample examples, and export schema.
+5. Sort `orders.json` purchase timestamp DESC then order ID; sort `items.json` by order ID then item ID. Build stable outputs with normalized number/date semantics; generation time can be logged separately without breaking determinism.
+6. Record source checksums, actual asset sizes (uncompressed and transferred if measured), observed counts, run commands, invalid/excluded row counts in `docs/DATA_PROFILE.md`. Do not assert a particular JSON size or parse latency before measuring.
+7. Record dataset and topology source URLs, exact license and required attribution in `docs/DATA_PROVENANCE.md`. Olist listing currently states CC BY-NC-SA 4.0; local use is the current scope. Keep data exports out of Git until the owner approves a distribution decision.
 
-- Are all seven expected source files present and correct?
-- How many orders/items have missing or incoherent timestamps?
-- Are any seller/customer state values unrecognized?
-- How many untranslated categories?
-- What is the runtime compressed size of full compact `orders.json` and `items.json`? Does lazy loading improve first interaction?
-- What exact TopoJSON source, license, and state code mapping will be used?
-- Are source dataset and derived exports redistributable under their terms? For this local-only POC keep source and unapproved processed data outside Git; assess public distribution only if hosting is later requested.
+## 7. Outstanding verified-at-runtime decisions
+
+- Profile local ZIP and decide how invalid financial rows are excluded or quarantined; state rules in `DATA_PROFILE.md` and test them.
+- Pin exact geographic TopoJSON source (see candidate links in `DECISIONS_AND_RISKS.md`), record license and inspect if feature IDs use UF strings or IBGE numeric codes. Require **27 unique state features** and a complete mapping to two-letter codes before map acceptance.
+- Benchmark realistic JSON payload and selector latency before adding optimization. Do not assume an estimated 65–75MB is factual.

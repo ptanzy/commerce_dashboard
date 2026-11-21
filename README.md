@@ -1,50 +1,55 @@
-# Commerce Delivery Intelligence — POC Documentation
+# Commerce Delivery Intelligence — Documentation Baseline v2
 
-**Status:** Updated design baseline / implementation not started  
-**Target:** A polished, static, English-language React/D3 dashboard demonstrating real Brazilian e-commerce delivery analytics in approximately two focused development days (planning target, not a guarantee).  
-**Repository:** `ptanzy/commerce_dashboard`  
-**Source data:** [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) (historical data, primarily 2016–2018).
+A planned **local-only** historical Olist e-commerce delivery dashboard, demonstrating React, TypeScript, D3 and analytically correct cross-filtering. This repository currently holds **specifications and AI work instructions, not a finished application**.
 
-This archive contains **documentation only**. It does not alter the GitHub repository, contain production source code, or redistribute Olist CSV files.
+## Locked decisions
 
-## Reading order
+- React + TypeScript + Vite; Tailwind + semantic tokens; D3/d3-sankey/d3-geo, TanStack Table.
+- Offline Python + DuckDB; static JSON with one order row per order and one item row per item.
+- Both dark and light themes, dark first-visit default.
+- Map defaults to **seller origins**; optional display toggle to customer destinations.
+- Initial date filter is **all valid historical purchase dates**.
+- Local development/build/preview only; no backend, no GitHub Pages.
+- Chart interactions share one filter store; data accuracy takes precedence over chart complexity.
 
-1. [`docs/PRODUCT_AND_FEATURES.md`](docs/PRODUCT_AND_FEATURES.md) — Product purpose, screen, capabilities and prioritized acceptance stories.
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Stack, design boundaries, data delivery, React/D3 integration and local execution.
-3. [`docs/DATA_SPECIFICATION.md`](docs/DATA_SPECIFICATION.md) — Raw input files, relational cardinality, derived fields, aggregation and data correctness contracts.
-4. [`docs/VISUALIZATION_AND_UX.md`](docs/VISUALIZATION_AND_UX.md) — Screen layout, exact chart behavior, filters, drill-through and accessibility.
-5. [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — Three short phases, dependency order, implementation checklist and explicit stop rules.
-6. [`docs/TESTING_AND_ACCEPTANCE.md`](docs/TESTING_AND_ACCEPTANCE.md) — Automated tests, manual checks, data integrity tests and release gate.
-7. [`docs/DECISIONS_AND_RISKS.md`](docs/DECISIONS_AND_RISKS.md) — Decisions, deferred features, risks, and remaining data-discovery questions.
+## Source dataset and local arrangement
 
-## Product definition
+Download the [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) and put its ZIP at `data/raw/olist.zip` (or extracted originals within `data/raw/`). The dataset's Kaggle listing states **CC BY-NC-SA 4.0**. Keep source files and generated row-level `public/data/` outputs **ignored by Git** pending explicit redistribution review.
 
-Users investigate **where deliveries occur, how reliably they arrive, and how shipping charges vary across Brazil**. The app combines KPI cards, a state-level map, origin-to-destination Sankey, time-based performance, and an order-level investigation table. Interactions update all relevant views in a predictable way.
+The six required CSVs are listed in `docs/DATA_SPECIFICATION.md`. The source geolocation, reviews and payments CSVs are not needed in P0. Geographic state topology is separate and must have provenance/license and exactly 27 mapped UF codes.
 
-**What this is not:** package GPS tracking, a live carrier dashboard, a route planner, a full e-commerce management suite, or a statistically representative logistics simulation.
+## Documentation guide
 
-## Locked presentation and execution defaults
+| File | Authority |
+|---|---|
+| `AGENTS.md` | Short entry point for AI coding assistants |
+| `docs/WORK_UNITS.md` | WU-00…WU-04 execution, prerequisites, stop gates and reports |
+| `docs/DATA_SPECIFICATION.md` | Exact source/export schemas, metric and filter definitions |
+| `docs/TESTING_AND_ACCEPTANCE.md` | Test fixtures and P0 release gates |
+| `docs/PRODUCT_AND_FEATURES.md` | Feature priorities and user stories |
+| `docs/ARCHITECTURE.md` | Canonical folders, state/data ownership and stack |
+| `docs/VISUALIZATION_AND_UX.md` | Chart behavior, dark/light UX and accessibility |
+| `docs/IMPLEMENTATION_PLAN.md` | Two-day aspiration and five WU sequence |
+| `docs/DECISIONS_AND_RISKS.md` | Accepted decisions and remaining source risks |
 
-- **Light and dark themes** with a visible, keyboard-accessible toggle; **dark is default**. Theme selection persists in localStorage, with safe fallback if storage is unavailable. CSS tokens style both charts and application UI.
-- **Local-only execution** using Vite (`npm run dev` and `npm run preview`); no hosted deployment, GitHub Pages, or publishing requirement for this POC.
-- **Initial map:** seller-origin state choropleth; user may switch to customer-destination state. Clicking map state filters the corresponding state dimension, not always destination.
-- **Initial date range:** all available valid purchase dates; actual extent comes from data profiling, not an invented interval.
-- Uploaded Olist archive is expected locally at `data/raw/olist.zip`, untracked. Prior data profiling claims must be independently verified during WU-00.
+Future reports added during WU-00: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. They are not completed yet.
 
-## Implementation commitments
+## Starting development
 
-- **One-page**, desktop-first but responsive app.
-- React + TypeScript + Vite, Tailwind CSS, D3 (`d3-geo`, `d3-sankey`), `topojson-client`, TanStack Table.
-- Preprocessing in Python using DuckDB if beneficial, with Pandas allowed for simple transformations; no server runtime.
-- Static processed data, source metadata and reproducible preprocessing commands.
-- Honest handling of orders with multiple items/sellers and missing dates.
-- Explicit data provenance and metric definitions.
-- No authentication, backend, live integration, forecasting, route simulation, or unnecessary state framework.
+Read every document first. Request an **inspection-only readiness review** or explicitly authorize a **single WU**. The project currently has five gated WUs: source verification (00), ETL/metrics (01), React shell/KPIs (02), D3 visuals (03), order explorer/QA (04). Authorization for planning or docs updates **does not** authorize application implementation.
 
-## Starting the work
+Exact npm/ETL commands will be added to this README when the implementation exists and is verified. Do not present speculative commands as tested.
 
-The repository owner should place these documents at the repository root (`README.md` and `docs/`), obtain the dataset separately, and use `docs/IMPLEMENTATION_PLAN.md` for the first task. **Do not treat the architecture as proof that the raw data has already been inspected.** The first implementation step must profile the actual downloaded CSVs and record findings.
+## Recommended .gitignore entries (verify before WU-01)
 
-## AI implementation instructions
+```gitignore
+/data/raw/
+/data/processed/
+/public/data/
+node_modules/
+dist/
+.venv/
+__pycache__/
+```
 
-Agents should read [`AGENTS.md`](AGENTS.md), then [`docs/WORK_UNITS.md`](docs/WORK_UNITS.md) and the linked specifications before proposing edits. Work proceeds one authorized WU at a time.
+Keep the source files in `data/raw/olist.zip`; if they were already tracked, `.gitignore` alone does not untrack them.

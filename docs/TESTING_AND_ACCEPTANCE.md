@@ -1,98 +1,87 @@
-# Testing Strategy and Acceptance Criteria
+# Testing and Acceptance — canonical POC v2
 
-## 1. Principle
+## Principles
 
-Trustworthy numbers and coordinated interactions are more important than animation and pixel-perfect polish. Test **data invariants first**, then dashboard behavior, then visual presentation.
+The test priority is **correct data grain + coherent filters + useful visualizations**, then responsive styling. Tests and claims must be reproducible. Never call a WU accepted because source exists; the agent must record actual executed commands/results.
 
-## 2. Testing layers
+## Tools and levels
 
-| Level | Tools | Focus |
+| Layer | P0 method | Purpose |
 |---|---|---|
-| ETL validation | Python assertions + DuckDB SQL or pytest | Source schema, joins, row counts, nulls, geographic IDs, idempotence |
-| Metric unit tests | Vitest | Distinct orders, denominators, inclusive delivery dates, percentiles, freight totals |
-| Selector tests | Vitest with fixture records | Category/seller/date cross-filter semantics, order vs item grain |
-| React component tests | React Testing Library | Filter chips, reset, table search/sort, empty states, keyboard controls |
-| Integration smoke | Playwright if feasible; otherwise manual documented script | Cross-chart filter interaction, tooltip/selection, order drill-through |
-| Build/local preview | `tsc`, Vite build, Vite preview | Local base path, assets, static export and route behavior |
+| Offline data | DuckDB/Python assertions; pytest optional | Keys, joins, source profiling, invariant totals, deterministic export |
+| Metrics/selectors | Vitest | Order distinctness, item matches, percentiles, calendar-date punctuality |
+| UI components | React Testing Library + Vitest | Filter reducer, chips, theme, table behavior, empty states |
+| Integrated UI | Structured **manual** walkthrough | Linked map/trend/Sankey/order details, desktop/mobile and keyboard |
+| Build | `tsc --noEmit` or project `typecheck`, `npm run build`, Vite preview | Runtime assets and type correctness |
 
-## 3. Required deterministic test fixtures
+**Playwright not a P0 dependency.** Do not install browser binaries without need or approval. Report which manual tests were actually performed and whether screenshot inspection occurred.
 
-Use a small crafted fixture with >= 6 orders spanning multiple states, categories, sellers, months, statuses and dates. Include these situations:
+## Deterministic test fixture requirements
 
-1. **Multi-seller:** one order, three items, two sellers, two product categories.
-2. **On deadline:** a delivered order has delivery timestamp later in the day than estimated delivery timestamp stored at midnight, but both occur on the same calendar date. Must count **on time**.
-3. **Late:** actual delivery calendar date is later than estimated date; classification late.
-4. **Missing actual:** canceled or pending order with no customer delivery date; excluded from on-time denominator and delivery-duration percentile, still counted in total orders if cohort includes it.
-5. **Missing category:** product/category translation is absent; explicit `Unknown`/raw-category fallback, no crash.
-6. **Invalid amount/zero price:** ETL reports invalid numeric values and freight ratio remains `N/A` for a zero-denominator cohort.
-7. **No matching filters:** zero orders, zero flows, safe `N/A` rates and a meaningful empty-state message.
-8. **Geolocation duplicates:** many prefix rows do not multiply order or item records.
+Create at least 8 synthetic test orders covering:
 
-## 4. Data correctness invariants
+1. Order with three items across two seller states and two categories, and a single customer state.
+2. Delivered at noon on estimated delivery calendar date (estimated at midnight): on time.
+3. Actual delivered date before promise date: early; after promise date: late.
+4. `delivered` status with actual date before purchase: `deliveryDays=null`, `deliveryDayDelta=null`, `classification='unknown'`, excluded from punctuality denominator.
+5. Canceled/pending and missing actual delivery: counted as purchased if valid date, excluded from delivery metrics.
+6. Zero items: order row remains when no item filters; disappears under seller/category constraint; amount columns show `—`.
+7. Missing category translation: stable fallback key and readable English label; category IDs not coupled to display labels.
+8. Null/invalid amount and zero price denominator, empty cohort; show `N/A` not false zero rate.
+9. Same-state item flow (`origin:SP → dest:SP`) and cross-state links: both valid, never a self-loop collapse.
+10. Two months and a month-selection switch: month-click updates global date cohort but trend still displays full-history domain/context.
 
-- [ ] `orders.json` has one row per `orderId`.
-- [ ] `items.json` is unique on (`orderId`, `orderItemId`).
-- [ ] Every exported item joins to an exported or deliberately accounted-for order; unmatched refs reported.
-- [ ] Order totals aren't inflated by item or geolocation joins.
-- [ ] For each order, item-level price/freight sum reconciles with order-level amounts under documented exclusion rules.
-- [ ] Delivered eligible count <= distinct total orders.
-- [ ] On-time count <= delivered orders with valid estimate and delivery date.
-- [ ] Median and P95 only use nonnegative valid durations.
-- [ ] Every known state code maps to a recognized Brazil state, or is reported as unknown.
-- [ ] Sankey item/link total reconciles to the eligible matching item contributions **before visual top-N suppression**.
-- [ ] No aggregation sums per-bucket distinct order counts across overlapping seller/category buckets as globally distinct orders.
-- [ ] Re-running ETL on identical inputs produces identical content values (ignoring separately declared generation timestamp).
-- [ ] Publicly published datasets comply with source licensing and minimize unnecessary source fields.
+## Data correctness invariants
 
-## 5. P0 integration acceptance walkthrough
+- [ ] One `OrderFact` per distinct `orderId`; unique (`orderId`, `orderItemId`) for items.
+- [ ] Every item joins to a known order or appears in an explicitly counted unmatched-exclusion report.
+- [ ] No accidental order duplication due to item joins; Olist geolocation **not** joined.
+- [ ] Valid date range inclusive by source calendar day; default unbounded includes all **valid purchase-date** orders.
+- [ ] Delivered before purchase produces unknown class and is excluded from on-time and percentile measures.
+- [ ] Same-day delivery compared to estimated calendar date is on-time; exact time of day irrelevant for punctuality.
+- [ ] R-7 median/P95 over fractional nonnegative days, rounded only for UI.
+- [ ] Correct AND semantics for seller and category **on the same item**, not existence of separate unrelated items within an order.
+- [ ] Matching item price/freight sums in KPI and Order Explorer agree; full-order values in drawer labeled separately.
+- [ ] Zero-item order appears in order KPI without item filters and displays `—` monetary columns; no Sankey contribution.
+- [ ] On-time numerator ≤ eligible on-time denominator ≤ delivered valid cohort ≤ distinct order cohort.
+- [ ] Sankey all-link total reconciles to mappable eligible item rows; top 15 subset displays correct coverage; unmappable count disclosed.
+- [ ] For an origin state, distinct order count may overlap with other origins; national distinct order KPI never adds state totals.
+- [ ] `brazil-states.topojson`: 27 unique state shapes/codes; all known seller/customer UF codes map or are reported.
+- [ ] Re-running ETL over unchanged inputs creates identical order/item data values; source checksum/processing version recorded.
 
-**A. Default state**
-- Open locally through Vite dev and production preview. Dashboard shows historical dataset title, the **full** valid purchase-date extent, four KPIs, **seller-origin default map**, trend, Sankey, order table and a dark/light toggle. All legends and units are visible.
+## Manual P0 acceptance walkthrough
 
-**B. Origin selection and destination toggle**
-- In the **default seller-origin mode**, click `SP` on the map. A **seller-origin SP** chip appears; the KPI order count equals distinct orders with at least one qualifying item from a seller in SP. The order table, trend and Sankey reflect the same filtered cohort. Clicking SP again or clearing its chip restores the previous cohort.
-- Toggle to destination mode and click `RJ`. A **customer-destination RJ** chip appears. KPIs, map, trend and table reflect the AND of the selected seller-origin and customer-destination filters. Clear independently; ensure neither filter is mislabeled.
+**A. Startup** — Confirm local data/metadata and build preview load without asset errors. Dark first visit; all valid historical purchase months accessible; seller-origin map selected; four KPI cards show actual values. Tooltips explain denominators.
 
-**C. Category selection**
-- Choose translated English category. KPI order count equals distinct orders with >= 1 matching item. Freight ratio uses only matching item charges and item prices. Table displays distinct orders without duplicate IDs.
+**B. Map** — Click origin SP: seller-state chip visible and all KPIs, table, Sankey change. Toggle destination then click RJ: BOTH chips persist, AND logic applies, independent chip clear works. Screen-reader-friendly state list provides equivalent selections.
 
-**D. Sankey link selection**
-- Click an origin->destination connection. Both selected state constraints become visible. Order table shows orders having matching item links; other charts agree with same cohort. Clear selection returns to previous relevant state.
+**C. Category and mixed grain** — Choose a translated English category. Distinct order count matches correct cohort, item ratio uses only matched seller/category items. Table shows per-order matching sums; drawer displays full-order totals separately.
 
-**E. Date filtering**
-- Restrict purchase-date range. Monthly buckets and KPIs reflect purchases in range. Range boundaries are inclusive at calendar-day granularity. Invalid range is rejected or prevented.
+**D. Sankey** — The diagram shows at most 15 directed links, coverage share, same-state SP→SP where present, and separately namespaced origin/dest nodes. Clicking SP→RJ sets both filters in one reducer action; chart/table reconcile.
 
-**F. Order exploration**
-- Search order ID, sort by duration, paginate, select a row. Detail shows original timestamps, categories, sellers and freight charge totals; items highlight matching category when active.
+**E. Monthly trend** — Click a month, see KPIs filtered to month while chart retains all months and highlights selected month; click a different month without clearing first; clear restores all. Empty/low-N months are labeled accurately.
 
-**G. Missing/no data**
-- Apply impossible/empty cohort. All charts show appropriate empty states, financial ratio/on-time/median show `N/A` rather than `0%`/`NaN`, and clear filters works.
+**F. Order explorer** — Search exact order ID, sort date and duration, paginate, open detail with source dates/item seller states and matching-vs-full totals. A zero-item order displays 0 items and `—` price/freight.
 
-**H. Theme, compatibility and accessibility**
-- Fresh load defaults to dark; light/dark toggle changes every styled UI and D3 chart element without altering the current filter cohort, and survives reload when localStorage is available. Both modes pass readable contrast/tooltip/legend inspection.
-- At desktop ~1440px and phone ~390px, content is readable and controls remain operable. Tab navigation reaches filters/table and visible chart equivalents. Chart color legends and tooltip data aren't color-only.
+**G. Empty/missing** — Use a filter combination yielding no orders. Show clear empty state, `N/A` for undefined rates; no errors, stale chart marks, `NaN`, or phantom paths. Clear/reset works.
 
-## 6. Performance gates (POC targets, measured on representative developer hardware)
+**H. Themes/responsive/a11y** — Toggle dark↔light and reload; theme persists, cohort unchanged. Test controls at ~1440px and ~390px widths, map/Sankey accessible equivalents, readable tooltips, SVG labels, keyboard focus and contrast. Verify reduced-motion behavior if transitions are used.
 
-- [ ] Production assets load without failed HTTP requests or CORS errors.
-- [ ] 100k-order scale (or documented full available sample) loads without crashing or locking the tab.
-- [ ] A filter change visibly responds in approximately <= 500 ms on typical desktop hardware after initial load; investigate and document if slower. This is a **target**, not a preexisting measurement.
-- [ ] No significant permanent heap growth after repeated select/clear cycles.
-- [ ] Sankey defaults to a readable bounded set of links and shows how much of eligible flow is displayed.
+## Performance measurement, not unverified guarantee
 
-Capture measured file sizes and timings in implementation notes; do not present estimates as verified performance.
+- Measure actual exported order/item file bytes, JSON parsing/initial load and filter-change responsiveness with representative full Olist data.
+- **Target** visible filter response ≤500ms on developer desktop after initial load. This is a target, not an already measured result; document actual results and investigate failure before adding complexity.
+- Table must not render 100k DOM rows (paginate 25 rows); Sankey at most 15 links; map at most 27 regions.
+- Repeated selection/clear cycles should not cause unbounded memory growth or stale state.
+- If full facts exceed workable browser limits, capture numbers and present focused optimization recommendation; don't silently replace real data with undisclosed samples.
 
-## 7. Release gate checklist
+## Release gate
 
-**Required to claim completed POC:**
-
-- [ ] Source-profile report created and data licensing decision documented.
-- [ ] Data ETL test and reconciliation assertions pass.
-- [ ] Unit tests for metrics and selectors pass.
-- [ ] Representative end-to-end P0 walkthrough passes.
-- [ ] Type-check, lint, and production build succeed.
-- [ ] Dashboard states no actual routes/carriers are tracked.
-- [ ] Local Vite dev and production preview serve all static assets correctly; no GitHub Pages deployment required.
-- [ ] README documents exact acquisition, transformation, local dev and production preview commands.
-
-**Optional, non-blocking:** Animated transitions, advanced brushing, previous-period comparisons, percentile overlays, exhaustive automated visual regression tests.
+- [ ] WU-00 profile and provenance reports complete; rights/attribution decisions documented.
+- [ ] WU-01 reconciled ETL outputs and metric/selector tests pass.
+- [ ] WU-02 theme, shared state and KPI interaction tests pass.
+- [ ] WU-03 chart interaction, state topology and dual-theme review pass.
+- [ ] WU-04 explorer, drill-through, local smoke, responsive and keyboard walkthrough pass.
+- [ ] Actual commands/results, known issues and failed/not-run tests documented.
+- [ ] Local dev + build/preview work; no public hosting claim.
+- [ ] README accurately documents download/ZIP placement, ETL and runtime commands; public Git ignore restrictions still respected.

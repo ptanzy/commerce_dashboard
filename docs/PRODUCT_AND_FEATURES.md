@@ -1,89 +1,56 @@
-# Product and Feature Requirements
+# Product and Feature Requirements — POC v2
 
-## 1. Objective
+## Goal
 
-Build a concise portfolio-grade dashboard demonstrating trustworthy analytical modeling, thoughtful React architecture, and meaningful custom D3 interactivity, using historical Olist Brazilian e-commerce records. The initial user is an analyst evaluating **delivery reliability, geographic differences, and freight charges**.
+A portfolio-grade **historical** Brazilian e-commerce delivery intelligence dashboard, implemented as a locally running static SPA, showcasing trustworthy mixed-grain analytics, linked React+D3 visualizations and drill-through into Olist orders. It is **not** a carrier tracking platform or a complete Brazilian retail market sample.
 
-### Product question
+Primary user question: **Which seller-origin and customer-destination areas have the greatest volume, how reliable are deliveries, how much freight is charged, and which historical orders support those views?**
 
-> Where are deliveries slower or less reliable, which sellers and destination states contribute to these patterns, and how can an analyst drill down to underlying orders?
+## Locked product decisions
 
-### Success criteria
+- **Local-only** run and Vite build/preview. No Pages deploy, cloud service or runtime backend.
+- **Dark and light modes**, dark on first visit, user-toggle with local persistence; visuals legible in both.
+- **Seller-origin** map on initial load, destination alternative; origin selection filters orders by existence of matching seller items.
+- **All historical valid purchase dates** selected by default (date filters unbounded). No implied live records.
+- Source Olist ZIP stored local/Git-ignored. Run data profiling before ETL; verified, attributed Brazil TopoJSON.
 
-An analyst can select a purchase-date range, destination state, and product category; view consistent updated KPIs, geographic data, trends and state-to-state flows; click a relevant mark to filter; and inspect supporting order records. Every displayed metric can be explained using documented source fields and rules.
+## P0 — required in a completed POC
 
-## 2. Priority and constraints
+1. Responsive header with source/year caveat, theme toggle, date/destination/origin/category filters, individual filter chips and reset.
+2. Four numerically correct KPIs: distinct order count, on-time rate with valid denominator, median purchase-to-delivery days, freight charges ÷ matched item price. `N/A` for zero denominators.
+3. Brazil state-level D3 choropleth (default origin, destination toggle) with click-to-filter and accessible action list.
+4. D3 monthly trend (purchase count / on-time toggle), with **stable full-history X-domain**, month-click date selection and sparse/partial-month indicators.
+5. D3 Sankey **top 15** directed seller-state → customer-state **item contribution counts**, including same-state links, displayed-share label; click sets state pair.
+6. TanStack Table with search, sort, pagination and order-detail view. **Matching-item** freight/value columns clearly distinguished from full-order detail totals.
+7. Coordinated filters and drill-through; item/category/seller filters use shared cohorts, never inflate distinct orders.
+8. English category labels from translation file with deterministic fallback, accurate BRL display, loading/empty/error states and attribution.
+9. Documented data profile, provenance/rights decision, deterministic Python/DuckDB ETL, Vitest/RTL tests, Python assertions, successful local build and manual acceptance.
 
-**P0 / required for completion**
+## P1 — optional only after P0 passes
 
-- Responsive dashboard shell with dataset/source/time-period identification and **light/dark theme toggle (dark default)**.
-- Purchase-date range, customer/destination state, **seller-origin state**, and product-category filters, with reset and visible active filters. Default date range is **all available source history**.
-- Four KPI cards: distinct orders, on-time delivery percentage, median purchase-to-delivery days, freight/item value ratio. Non-delivered/unknown records excluded when appropriate.
-- Brazil state-level D3 geographic view with selectable destinations and delivery performance metric.
-- D3 Sankey with aggregated seller-state -> destination-state flows; links based on **item/order-seller contribution**, not actual routes.
-- Monthly D3 trend of order volume and delivery performance.
-- Searchable/sortable/paginated order explorer and order detail view.
-- Consistent drill-through, empty states, tooltip labels and data provenance.
-- Automated correctness and interaction checks plus static production build.
+- Previous equal-length period KPI comparisons; P95 duration visual and early/on-time/late distribution.
+- Sankey weight toggles: matching freight charges or item price; only after semantics/tests are defined.
+- Choropleth alternative measures (on-time %, median days) with low-N warnings.
+- Refined micro-animations, drag brushing, richer mobile alternatives and advanced drill-down.
 
-**P1 / high-value enhancements if P0 is stable**
+## P2 / explicitly excluded
 
-- Previous equal-duration purchase-date period comparison.
-- Median and P95 delivery-duration toggle or band and distribution.
-- Early/on-time/late distribution; freight ratio segmented by state or category.
-- Hover highlights, chart-specific legends, small transitions and mobile refinements.
+GPS routes, carriers, vehicle fleets, shipment tracking, inventory, payments, review sentiment, forecasting, live data, auth, SQL server, hosted API, production operations, GitHub Pages and Playwright as a required acceptance gate.
 
-**P2 / defer**
+## User stories / acceptance scenarios
 
-- Carrier performance, live events, delivery GPS trajectories, warehouse capacity, route optimization, predictive ETAs, user accounts, persistent personal preferences, automated shipments and full admin reporting.
-
-## 3. Data-supported features
-
-| Business concept | Evidence available in Olist | Dashboard feature / qualification |
+| ID | Demonstration | Invariant |
 |---|---|---|
-| Purchase volume | `olist_orders_dataset` order IDs and purchase timestamps | Distinct order KPIs and monthly volume |
-| Delivery punctuality | Actual customer delivery + estimated delivery | On-time and lateness for valid delivered records only |
-| Delivery duration | Purchase and actual customer delivery | Purchase-to-delivery duration, **not** carrier transit time |
-| Freight charged | `olist_order_items_dataset.freight_value` | Sum of freight charges by eligible items; **not** seller carrier cost |
-| Product categories | Products plus Portuguese-to-English category translation | Product filter; untranslated values get explicit fallback |
-| Geographic demand | Customer state and city, optional geo coordinates | State-level choropleth |
-| Seller-to-buyer relationships | Item seller IDs and customer IDs | Aggregated seller-state to customer-state flow connections, **not physical driving routes** |
-| Actual carrier / route | Not present | Explicitly excluded |
+| US-01 | Load local dashboard | Full historical date extent, source disclosure, dark-first, correct P0 KPIs |
+| US-02 | Click origin SP | All other components use eligible distinct orders, matching items only |
+| US-03 | Switch to destination map and click RJ | Both origin and destination chips visible; AND filtering; no silent reset |
+| US-04 | Filter translated category | One order counted once; charges only from matching seller/category items |
+| US-05 | Click Sankey SP→SP or SP→RJ | Same-state links work; `set_flow_pair` updates both filters atomically |
+| US-06 | Click March 2018 | KPI cohort updates; trend retains other months with muted styling; click another month directly |
+| US-07 | Search/inspect order | One row per order; matching amounts differ from labeled full-order detail amounts when applicable |
+| US-08 | Clear a filter/no matches | All components reconcile; empty state and `N/A` rather than `NaN` |
+| US-09 | Toggle theme and reload | Dark/light persist without losing current data filters during toggle |
 
-## 4. Screen sections
+### Feature-to-data support
 
-1. **Header and filters:** Dashboard title, dataset years, data-source caveat, date range, states/categories, reset.
-2. **KPI strip:** Orders, on-time rate, median delivery days, freight-to-item value, each with denominator/eligibility tooltips.
-3. **Primary analysis:** Brazil state choropleth and time-series side by side on wide screens.
-4. **Trade/flow investigation:** Top-N seller-state to customer-state Sankey, value selector (`item freight`, `item value` or item-link volume), explicit metric label.
-5. **Detailed records:** TanStack Table, full-order details and linked seller/item contributions.
-
-## 5. User stories and acceptance
-
-**US-01 Overview.** Given no filters, display eligible totals and the purchase date extent. The app never implies its records are live.
-
-**US-02 Cross-filter.** On the default seller-origin map, clicking a seller state creates a labeled origin filter and updates KPIs, trends, table and Sankey for distinct orders with matching seller items. The origin/destination toggle switches the map dimension; a destination selection creates a separately labeled destination filter. Clearing either filter restores the appropriate previous cohort.
-
-**US-03 Product scope.** When the user selects a category, the cohort is **orders containing at least one matching item**; order counts and durations count each order once; item price and freight totals include **only matching items**. The UI labels this mixed scope wherever needed.
-
-**US-04 Flow investigation.** Clicking a Sankey link filters seller state and customer state; drill-through lists orders having matching eligible item contributions. All charts reflect the filter; the total flow metric is not mislabeled "distinct orders" when an order contributes multiple seller/category links.
-
-**US-05 Reliability.** On-time metrics exclude canceled, pending, and delivered orders with missing essential timestamps; date-only estimates are treated as end-of-calendar-day inclusive. Tooltips disclose denominator.
-
-**US-06 Exploration.** User can search by order ID, sort relevant columns, change pagination, view order details, and return to unfiltered view.
-
-**US-07 Trust.** A visible source/provenance control states: historical Olist purchase and delivery records, Brazilian geography, flow lines approximate relational connections, no live transport tracking.
-
-**US-08 Non-happy paths.** No-data filters, invalid source rows, untranslated categories and location gaps do not crash or silently introduce fabricated values.
-
-## 6. Explicitly out of scope
-
-No role-based permissions, checkout, payments, inventory, carrier comparison, tracked package path, high-frequency live dashboard, custom user reports, or production data service. No assumption that Olist data represents Brazil's entire e-commerce market.
-
-## Locked design defaults (supersede earlier informal examples)
-
-- Themes: both light and dark are P0, with **dark as the first-visit default**; user can toggle without losing filters or selected records.
-- Hosting: **local-only** for the POC; the production build is tested with Vite preview, no publishing step.
-- Map: **seller origin** by default; **customer destination** available as a toggle. Map clicks apply the currently displayed dimension's filter.
-- Date: initialize to **all valid historical purchase dates**, not just 2018 or a recent window.
-- Default map counts are *distinct orders represented in each seller state's matching items*; a multiseller order may occur in multiple origin states, so individual state order counts are not additive to the overall order total.
+Order/delivery dates and statuses are in `olist_orders_dataset.csv`; items and freight charges in `olist_order_items_dataset.csv`; seller states in `olist_sellers_dataset.csv`; customer states in `olist_customers_dataset.csv`; categories/translations in products and category translation CSVs. No carrier, actual road routes or customer shipment GPS. Revenue and true shipping operating costs must not be inferred from `freight_value`.

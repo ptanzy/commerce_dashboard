@@ -1,103 +1,44 @@
-# Two-Day Implementation Plan
+# Implementation Plan — two-day target, five bounded work units
 
-## Strategy
+## Schedule philosophy
 
-Make the dashboard **demonstrably useful as early as possible**. Deliver in three short phases, not a 14-WU infrastructure plan. Target is roughly two development days **if dataset access, compatible tooling, and testing go smoothly**; no guarantee. Favor completing one reliable cross-filtered vertical slice over implementing many partially connected chart features.
+The user prioritizes completing a convincing local POC within roughly **two focused development days**, not building enterprise infrastructure. Time estimates are planning aspirations, not promises. Aim for one correct connected vertical slice early. No autonomous work beyond the explicitly authorized WU; all current changes are documentation-only until the user approves implementation.
 
-Do not start application implementation before inspecting actual Olist inputs and confirming the data export/license strategy.
+## WU sequence and gates
 
-## Stage 0 — Dataset access and profiling (initial gate)
+| WU | Task | Completion evidence |
+|---|---|---|
+| **WU-00** | Verify actual ZIP, source joins, key data anomalies, TopoJSON identifiers/license and data rights | `docs/DATA_PROFILE.md`, `docs/DATA_PROVENANCE.md`, resolved data source assumptions |
+| **WU-01** | DuckDB preprocessing, compact contracts, metric/selector engine and fixtures | Generated local order/item/manifest outputs, reconciled tests and data size report |
+| **WU-02** | React app, theme system, shared filters, KPI cards and loading/error states | Local app runs, dark/light, cross-filtered KPIs, Vitest/RTL |
+| **WU-03** | D3 choropleth, fixed-domain monthly trend, top-15 Sankey, accessibility and responsive checks | D3 charts react to shared filters with tested semantics |
+| **WU-04** | TanStack order explorer, drawer, drill-through, integration and manual QA | Full P0 acceptance walkthrough, production build, README commands |
 
-**Input:** Olist original downloaded CSVs. No GitHub write is necessary until the project owner approves the selected data-distribution strategy.
+Dependencies are strictly `WU-00 → WU-01 → WU-02 → WU-03 → WU-04`. The user may authorize a batch, but every internal stop gate still applies. Keep WU count as **5** without inflating product scope. Feature additions are not a result of splitting WU-01.
 
-- [ ] Obtain the seven selected CSVs listed in `DATA_SPECIFICATION.md`.
-- [ ] Profile columns, unique keys, row counts, missing delivery dates, unknown states, category translations, date range, and duplicate geolocation prefixes.
-- [ ] Confirm metric semantics and document exact ETL decisions in a small processing report.
-- [ ] Identify TopoJSON source/license and state-code mapping.
-- [ ] Decide public artifact licensing: committed derived data vs code-only ETL plus safe demo fixture.
+## Stage-to-WU mapping
 
-**Exit gate:** Source schema/profile recorded; no unresolved key join assumptions; data redistribution policy documented.
+- **Stage 0:** WU-00 — data and provenance verification.
+- **Stage 1:** WU-01 — data engine, contracts and deterministic metrics.
+- **Stage 2:** WU-02 and WU-03 — React foundation and linked D3 visuals.
+- **Stage 3:** WU-04 — order explorer, acceptance, README and local build.
 
-## Stage 1 — Data pipeline and app skeleton
+This is **four stages including Stage 0**, not three. `WORK_UNITS.md` provides authoritative AI execution instructions and per-WU stop gates.
 
-**Goal:** Real, validated Olist-based data accessible in a browser with correct KPI outputs.
+## Risk and guardrails
 
-- [ ] Initialize Vite React TypeScript, styling, testing and build tooling; lock dependencies.
-- [ ] Configure Vite for local root (`/`) paths, local dev and production preview; do not create hosting workflows.
-- [ ] Implement `scripts/prepare_data.py` (DuckDB or Pandas for joins), output order/item facts, optional initial flow summary, location/state topology, and data manifest.
-- [ ] Add schema verification and a processing report (counts, nulls, unmatched foreign keys, translations, invalid geography, excluded dates).
-- [ ] Create explicit typed domain models and shared metric functions.
-- [ ] Implement static loader and no-data/error/loading UI.
-- [ ] Build shell, filter bar and four KPI cards with correct denominators; add dark-default/light-toggle theme tokens and persistence.
-- [ ] Tests for multi-item order arithmetic, date cutoff inclusion, missing outcomes and zero-denominator behavior.
+- **Never** spend WU-01 on the million-row geolocation CSV; we use seller/customer two-letter state codes and a separate state topology.
+- Store source/derived row-level files untracked. Do not block local analysis on permission to publish; distribution to a public repository requires separate license review.
+- **Only six** business-data CSVs needed for P0; optional reviews/payments/geolocation deferred.
+- No `geo-flows.json` or `locations.json` for P0; no multi-stack ETL; no MapLibre, SQL service or React state framework.
+- Browser JSON payload is an **unknown to measure**, not a presumed 75 MB problem; optimize only on evidence.
+- P0 charts: fixed-domain month-click (no drag), top-15 Sankey item links (no metric toggle), state count map (no hatching), both themes.
+- Manual mobile/keyboard checks occur **during component WUs**, not left exclusively to WU-04.
 
-**Deliverable:** App runs locally, source data loads, and filtered KPI values are testably correct.
+## Handoff protocol
 
-**Stop rule:** If real data cannot be publicly redistributed, publish a clearly labeled non-Olist public fixture and retain local ETL instructions. Do not silently substitute synthetic records as real Olist data.
-
-## Stage 2 — Interactive D3 dashboard
-
-**Goal:** A polished linked analysis workflow.
-
-- [ ] Prepare validated Brazil states TopoJSON; build D3 choropleth with **seller-origin default** and destination-mode toggle, appropriate filters and metric denominators.
-- [ ] Build monthly D3 trend chart with tooltips and simple date selection (brushing optional if available without delay).
-- [ ] Build `d3-sankey` with item contribution weights and top-N readability rule.
-- [ ] Implement TanStack Table explorer and detailed order panel.
-- [ ] Wire shared filter actions/selectors and visible filter chips/reset.
-- [ ] Validate chart/table/KPI agreement on explicit fixtures.
-
-**Deliverable:** Complete workflow: select state/category/date, inspect Sankey and metrics, drill down to supporting orders, clear filters.
-
-**Stop rule:** Prefer fewer fully correct charts over cosmetic transitions or extra chart modes. If full-data Sankey is unreadable, cap to top-N, show displayed flow share and provide table drill-through.
-
-## Stage 3 — QA, polish, local release
-
-**Goal:** Stable demo and credible handoff.
-
-- [ ] Test with complete processed dataset or document any deliberate sample size.
-- [ ] Run type-check, lint, unit tests and production build.
-- [ ] Validate visual states (all, one state, one category, narrow dates, empty, missing).
-- [ ] Check desktop, tablet/mobile, keyboard controls and responsive chart sizing.
-- [ ] Confirm displayed metrics against independently computed data samples.
-- [ ] Test local `npm run dev` and production `npm run preview` paths; verify all static data requests return successfully.
-- [ ] Write concise setup, data acquisition, licensing, and **local run/preview** instructions in README.
-- [ ] Tag or mark P0 accepted only after release gate in `TESTING_AND_ACCEPTANCE.md`.
-
-**Deliverable:** Buildable, documented and testable **local** static POC (possible future hosting is out of scope).
-
-## Dependency order
-
-```mermaid
-flowchart LR
-  A[Profile source files] --> B[Data contract and ETL]
-  B --> C[Metric functions and fixture tests]
-  C --> D[Dashboard shell + shared filters]
-  D --> E[Map and trends]
-  D --> F[Sankey and order explorer]
-  E --> G[Integration and acceptance]
-  F --> G
-```
-
-## Suggested issue/commit boundaries (optional)
-
-1. `chore: establish app foundation and data contracts`
-2. `feat: prepare and validate Olist analytical facts`
-3. `feat: add dashboard KPIs and shared filters`
-4. `feat: add D3 map and monthly trends`
-5. `feat: add Sankey and order explorer`
-6. `test: verify integrated dashboard and static build`
-
-These are **logical checkpoints**, not mandatory separate Codex Work Units. They may be completed directly through normal ChatGPT/GitHub editing if convenient.
-
-## Resource guardrails
-
-- One page, no server runtime, no geospatial tile stack, no charting framework alongside D3 by default.
-- No live APIs or authenticated service connections.
-- No custom D3 DOM lifecycle framework.
-- No excessive dependency/version work: choose compatible stable packages once, install, commit lockfile.
-- No extra exploration projects or new dashboards during P0.
-- If deadline becomes tight, cut: period-comparison chips, P95 toggle, advanced animation, Sankey measure switching, complex date brush **before** cutting correctness or linked filtering.
+For each authorized WU, report branch, changed files, exact commands/results, actual dataset provenance and counts, passed/failed/not-run tests, blockers, evidence for its exit gate, and the next permitted WU. Do not claim successful production screenshots without actual inspection. Preserve unrelated user modifications. Commit/PR only when authorized; do not push to `master` without permission.
 
 ## Definition of done
 
-The P0 workflows in `PRODUCT_AND_FEATURES.md` and `TESTING_AND_ACCEPTANCE.md` all pass; local production-preview build labels its data truthfully; code and docs are reproducible; remaining enhancement gaps are explicitly marked as non-blocking.
+All P0 stories in `PRODUCT_AND_FEATURES.md`, invariants in `DATA_SPECIFICATION.md`, and gates in `TESTING_AND_ACCEPTANCE.md` are actually verified using real Olist data (or explicitly approved labeled fixtures). `npm run build` works; app runs locally; no provenance/route misrepresentations; unresolved P1 is openly deferred.

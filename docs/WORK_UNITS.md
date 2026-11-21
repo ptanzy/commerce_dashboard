@@ -1,237 +1,128 @@
-# WORK_UNITS.md — AI implementation instructions
+# WORK_UNITS.md — canonical AI agent instructions, version 2
 
-**Repository:** `ptanzy/commerce_dashboard`
-**Product:** Commerce Delivery Intelligence — two-day proof of concept
-**Audience:** ChatGPT, GitHub Copilot, Codex, or any coding assistant
-**Status:** Planning specification, not an instruction to begin all work automatically
-**Scope authority:** This file coordinates implementation; the source of truth for domain behavior remains the linked specification documents.
+**Project:** `ptanzy/commerce_dashboard` · local two-day React+D3 Olist POC · **WU-00 through WU-04**
 
-## 0. Read this first — mandatory operating contract
+## Required operating rules for ChatGPT, Copilot, Codex and other agents
 
-Before creating, editing, installing, or executing anything:
+**Before doing anything to code**, inspect repo tree, `git status`, current branch, `README.md`, `AGENTS.md` and **all** `docs/*.md`. Read `DATA_SPECIFICATION.md` and `ARCHITECTURE.md` especially carefully. Report which WU is eligible and the evidence for its prerequisites. **Inspection-only requests are not implementation authorization.**
 
-1. Inspect the repository tree and current branch/status. Do not assume it is empty.
-2. Read `README.md` and **all** documents under `docs/`, especially:
-   - `ARCHITECTURE.md`
-   - `PRODUCT_AND_FEATURES.md`
-   - `DATA_SPECIFICATION.md`
-   - `VISUALIZATION_AND_UX.md`
-   - `IMPLEMENTATION_PLAN.md`
-   - `TESTING_AND_ACCEPTANCE.md`
-   - `DECISIONS_AND_RISKS.md`
-3. Report a concise inventory, the current implementation stage, source-data availability, significant discrepancies, and the next eligible work unit.
-4. **Implement only the specifically authorized WU.** A request to inspect, plan, or estimate is **not** approval to change files.
-5. If prerequisites for the authorized WU are missing, perform only safe, useful substeps and report the blocker. Never fabricate source data, passing tests, screenshots, or user approvals.
-6. Before edits, check the working tree and respect preexisting user modifications. Do not reset, overwrite, delete, merge, force-push, or edit unrelated files.
-7. Prefer one branch for the POC, with small, reviewable commits/PRs. Do not commit or push to `main` without explicit approval.
-8. Do not introduce a new platform, backend, ORM, database server, authentication, streaming pipeline, maps SDK, or chart framework without explaining the deviation and getting approval.
+Implement **only** the WU the owner explicitly authorizes; stop after its test and handoff gate. The owner can authorize multiple WUs but each gate still applies. Protect preexisting user changes; never reset, force push, delete untracked files or edit unrelated files. Work on a user-approved feature branch, never push to `master` without permission. Do not install dependencies, create/modify files, run commands or publish data in inspection-only mode. Report failures, incomplete work and checks not run accurately. Don't claim that tests or human visual acceptance passed unless actually executed and observed.
 
-**Task boundary:** The agent may make the changes needed to complete an authorized WU, run locally supported checks, and report the result. It must stop at the WU exit gate; never start the following WU automatically. The owner may explicitly authorize a batch of WUs.
+When specs conflict, follow this order: current explicit owner instructions → `DATA_SPECIFICATION.md` (metric/filter grain) → `TESTING_AND_ACCEPTANCE.md` (gates) → `PRODUCT_AND_FEATURES.md` (P0/P1) → `ARCHITECTURE.md` (folder/state ownership) → `VISUALIZATION_AND_UX.md` (appearance/interactions) → `IMPLEMENTATION_PLAN.md` (schedule) → this file (execution mechanics). **Do not independently rewrite foundational contracts**; escalate material conflicts.
 
-## 1. Product in one paragraph
+## Approved scope and stack
 
-Build a polished, **single-page, static React + TypeScript + D3** dashboard over the historical Olist Brazilian E-Commerce dataset, focused on order-to-delivery reliability and item-level freight charges. The page has KPI cards, geographic state map, seller-state → destination-state Sankey diagram, time-series trends, order explorer, and coordinated filtering. Use reproducible Python preprocessing, prebuilt static assets, no backend, and **local-only execution**. Keep the POC achievable in approximately two focused development days by prioritizing correct, demonstrable interactions over animation or enterprise infrastructure.
+**P0:** Olist local CSV ZIP → Python+DuckDB processing → validated compact order/item JSON + manifest; React/TS/Vite dark-and-light local app, four correct KPIs, shared date/destination/seller/category filters, seller-origin-first 27-state D3 map, month-click fixed-domain D3 trend, top-15 directed item-count Sankey, TanStack distinct-order explorer/drawer, testable cross-filtering, validation, local build and manual acceptance.
 
-## 2. Scope and dependency rules
+**P1 (after P0):** P95 chart, period comparisons, Sankey freight/value measure switch, map rate/duration toggle, chart brush, visual transitions, Playwright. **Excluded:** backends, SQL server, geo-prefix joins, GPS/routes/carriers, payments/reviews, public hosting, external live APIs, auth, Redux, heavy geo map frameworks.
 
-### Required P0 behaviors
-- Data sourced from actual verified Olist CSV inputs, or from an **explicitly labeled fixture** when full data cannot be used or published.
-- Four KPI cards: distinct orders, on-time rate, median order-to-delivery duration, and freight-charge/item-price ratio.
-- **Both dark and light modes** with a visible accessible toggle, dark initial default and persisted preference.
-- **Seller-origin map default**, with customer-destination toggle; map clicks filter the displayed state dimension.
-- **All valid historical purchase dates** selected by default.
-- Shared date, destination state, product category filters and clearable selections.
-- D3 Brazil state choropleth, monthly trend chart, and bounded top-N `d3-sankey`.
-- TanStack Table-based searchable/sortable/paginated distinct-order explorer and record detail.
-- Tooltips, units, loading/empty/error states, accessibility basics, responsive layout.
-- Data reconciliation, metric and selector tests, production build, static base-path verification.
+**Never invent** source counts, license clearance, actual routes, performance timing, a passing test or Olist observations. The locally present Olist ZIP may be used for analysis but remains Git-ignored, along with row-level derived exports. Record source license (Kaggle currently lists CC BY-NC-SA 4.0) and geography attribution in `docs/DATA_PROVENANCE.md`.
 
-### P1 if time permits
-- Prior-equivalent-period KPI comparison, P95 duration toggle or chart, advanced date brushing, Sankey measure toggle, subtle transitions.
-- Never delay or compromise P0 correctness to add P1.
+**Canonical folders:** `src/app/` for reducer/theme/shell, `src/domain/` for types/metrics/selectors, `src/data/` for loader/index, `src/components/` for reusable UI, `src/charts/` for D3, `src/features/orders/` for table/drawer, `scripts/` for ETL, `tests/fixtures/` for tests. Do not create alternate `src/analytics/` or `src/types/` sources of truth.
 
-### Explicit exclusions
-No carrier/GPS route tracking, delivery vehicle simulation, actual shipping-cost claims, live APIs, authentication, payment/review analytics, forecast models, backend services, PostgreSQL, Redis, Kafka, Kubernetes, MapLibre, deck.gl, or Redux.
+## Always enforce data contracts
 
-## 3. Approved implementation stack
+- One order per `orderId`, one item per (`orderId`, `orderItemId`); seller belongs to item. Category and seller filters must match **the same item**; order cohort is distinct IDs of matched items only when item filters active. Without item filters, eligible valid-purchase-date orders include zero-item orders.
+- Order delivery KPIs count orders once; financial KPI and table financial columns use **matching items**, not whole order totals. Order drawer can show separate clearly labeled full-order sums. Zero-item order amount = `—`.
+- `delivered` with incoherent negative duration: delivery class `unknown`, no on-time or duration eligibility; compare calendar **dates** for on-time. Fractional duration days, R-7 quantiles, one-decimal UI.
+- No `geo-flows.json`, `locations.json`, or geolocation CSV in P0. Use actual seller/customer UF codes and validated 27-state TopoJSON.
+- Sankey top **15 directed item-count links** including SP→SP; origin:SP and dest:SP are different nodes. P1 alternate weights only. Link selection sets seller+customer pair atomically, no `selectedSankeyLink` state.
+- Trend retains full-history month axis under date filters; clicking month sets date range while chart remains navigable and shows outside-range months muted. The contextual chart scope is explained clearly.
+- Dark/light token-driven presentation, dark first visit, theme choice persists locally and never resets filters. `base:'/'`, no GitHub Pages.
 
-- React + TypeScript + Vite
-- D3 modules (`d3-geo`, scales, shape etc.) and `d3-sankey`; `topojson-client`
-- Tailwind CSS for styling
-- TanStack Table for the order explorer
-- Python + DuckDB for offline transforms; Pandas only if materially easier
-- Browser-readable preprocessed JSON / TopoJSON
-- Vitest + React Testing Library; Python tests/assertions; Playwright smoke test if feasible
-- Local Vite dev/build/preview; Vite `base` remains `/` for local paths; no GitHub Pages workflow
+## Ordered work units and exit gates
 
-Prefer D3 for geometry/layout and React for the SVG DOM; imperative D3 DOM mutations only when justified. Charts receive typed data/selection callbacks and **do not** independently define business metrics.
+### WU-00 — Source data and geographic verification
 
-Use compatible stable dependency versions confirmed at implementation time and commit a lockfile. Do not guess installed versions or claim checks ran if they did not.
+**Prerequisites:** Owner has provided local `data/raw/olist.zip` (or extracted originals). No app implementation yet.
 
-## 4. Data semantics — nonnegotiable
+1. Inspect file inventory/headers/row counts, primary/foreign key cardinality, status and date quality, missingness, multi-seller/category orders, missing category translations and financial irregularities. Verify **six required business CSVs**, not the optional geolocation table.
+2. Confirm the existing source dataset license and attribution from its listing; document whether local derived assets are Git-ignored. **Don't block local-only work solely because public redistribution is not approved**; block public commit of data.
+3. Select one Brazil 27-state topology candidate from `DECISIONS_AND_RISKS.md`, inspect mapping to UF strings and confirm source usage rights. Record chosen immutable version/source, checksum and state mapping. If no reusable topology is available, report blocker rather than inventing shapes.
+4. Reconcile assumptions in `DATA_SPECIFICATION.md` with actual observed anomalies; propose minimal contract changes only where evidence warrants.
 
-Read `DATA_SPECIFICATION.md` for precise schemas and meanings.
+**Deliverables:** `docs/DATA_PROFILE.md` (observed counts and reproducible queries), `docs/DATA_PROVENANCE.md` (source and license, topology mapping), validated source asset decision.
 
-- Order-level facts: **one row per `order_id`**, and total orders = distinct order IDs.
-- Item-level facts: **one row per (`order_id`, `order_item_id`)**, with item `price` and `freight_value`.
-- Orders can include several sellers/categories; do not duplicate order-level KPIs by joining item rows.
-- Category filter matches an order if **at least one** of its items matches; conditional item-based freight ratios use the **matching items** only. The frontend must clearly label the active cohort.
-- Delivery rate denominator: delivered orders with valid actual and estimated delivery dates. Compare **calendar dates** for early/on-time/late, not estimated midnight vs actual time of day.
-- Delivery duration: purchase timestamp to customer delivery timestamp; not carrier transit time.
-- Percentiles exclude unknown or invalid durations; zero denominator => `N/A`, never `NaN`.
-- Freight is a **customer freight charge**, not a verified operating cost.
-- Seller → customer state lines are **observed order relationships**, not real transportation paths.
-- Geolocation prefix data has duplicates; deduplicate/aggregate prior to joins.
-- Use English translations; retain explicit fallbacks where translation missing.
-- Date filters use purchase date and inclusive local calendar dates; no invented UTC interpretation.
-- For Sankey, flow weights may be item counts or freight amounts; distinct order totals must **not** sum distinct counts from overlapping buckets.
-- Every exported number needs an identifiable source and reproducible transformation. Report exclusions and unmatched joins.
+**Tests/gate:** CSV keys and states accounted for; 27 topology features verified; provenance documented. No WU-01 until WU-00 accepted.
 
-## 5. Execution sequence — 4 bounded work units
+### WU-01 — Compact ETL, data contracts and metrics/selectors
 
-Every WU below has prerequisites, files/tasks, tests, and an **exit gate**. The WUs are ordered and can be assigned individually or in an explicitly authorized batch.
+**Prerequisite:** WU-00 accepted.
 
-### WU-00 — Dataset reconnaissance and data-rights gate
+1. Create `scripts/prepare_data.py` using **DuckDB and Python**, not dual Pandas path. Read local ZIP/CSVs; create `orders.json`, `items.json`, `metadata.json` according to `DATA_SPECIFICATION.md`.
+2. Build deterministic unit fixtures and a minimal TypeScript domain package under `src/domain/` (types, cohort filter selector, metric definitions); loaders/index helpers under `src/data/` where necessary. Add minimal npm project tooling for Vitest/TS tests if not already available, but **do not implement dashboard UI**.
+3. Generate data locally under gitignored `public/data/`, account for nulls/unmatched joins, export file sizes and actual source counts; use only necessary fields and stable sort.
+4. Test distinct order grain, category+seller intersection, zero-item orders, same-day delivery, negative duration, zero denominator, R-7 percentiles, matched freight and seller-state membership.
 
-**Prerequisites:** The owner has supplied the original Olist CSVs locally or made them otherwise available to the agent. For source file list, see `DATA_SPECIFICATION.md`.
+**Tests/gate:** Document executed ETL/test commands; actual outputs validate and reconcile; metric/selectors pass; no unreviewed publication of rows. WU-02 only when accepted.
 
-**Actions**
-1. Inspect all seven source CSVs (schema, count, nulls, uniqueness, referential relationships).
-2. Check status/date distributions, multi-seller/multi-category orders, duplicate geolocation prefixes, missing categories, invalid numeric values, and translation coverage.
-3. Locate a usable Brazil states TopoJSON source and record provenance/license. Confirm state-code mapping.
-4. Review the Olist redistribution terms before committing **any** derived public data.
-5. Draft a compact profiling report with actual counts and decisions on missing/invalid records.
-6. Determine whether production assets can include real processed data, or whether public demo fixtures are required.
+### WU-02 — React shell, themes, filter controls and KPIs
 
-**Deliverables:** `docs/DATA_PROFILE.md` (actual observations, queries, exclusions, source links), `docs/DATA_PROVENANCE.md` (license/distribution decision), updated contracts only if actual data forces changes.
+**Prerequisite:** WU-01 accepted.
 
-**Exit gate:** Inputs verified, join semantics confirmed, geography source and publishing policy settled. **Do not proceed if files or licensing disposition are missing.** The agent may write a *provisional* report, but must label it as unverified and not claim WU-00 passed.
+1. Scaffold/configure Vite React TypeScript app and Tailwind with local `base:'/'`. Load/validate JSON with explicit loading/empty/error states; create item index once.
+2. Implement `useReducer` using the canonical `Filters`/`FilterAction`, filter chips/reset and clearly labeled seller/destination/category/date controls. Set initial date unbounded (all valid history).
+3. Add dark/light semantic tokens, dark first-visit default and `localStorage` persistence; no theme-induced cohort changes. Four KPI cards use tested domain selectors.
+4. Test default counts/denominators, multi-item seller/category filters, missing values, empty state, theme persistence, 1440px + 390px baseline shell usability.
 
-### WU-01 — Data pipeline, project foundation, verified metrics
+**Tests/gate:** Local app loads and four KPIs are correct; typecheck, relevant tests and build pass; no chart implementation required. WU-03 next.
 
-**Prerequisites:** WU-00 exit gate passed, or owner explicitly authorizes **fixture-only foundation** (must remain labeled fixture, not Olist analysis).
+### WU-03 — D3 map, trend and Sankey with linked interactions
 
-**Actions**
-1. Scaffold Vite React/TS app with Tailwind, Vitest, D3 and TanStack Table, configured for local Vite dev and preview (`base: '/'`).
-2. Create reproducible Python preprocessing under `scripts/` using DuckDB where useful.
-3. Produce typed `orders`, `items`, optional `geo-flows`, `locations`, `metadata`, and states topology according to `DATA_SPECIFICATION.md`. Preserve order/item grain.
-4. Commit **no raw Olist data by default**. Generated public assets only if data rights review allows; otherwise small clearly labeled synthetic fixtures plus instructions for private local generation.
-5. Implement typed browser loader, deterministic metric functions and selectors; create four KPIs, date/state/category filters, basic shell and **dark-default light/dark theme switch** using semantic tokens and safe persistence.
-6. Add schema/reconciliation checks and deterministic multi-item/date-boundary fixtures.
+**Prerequisite:** WU-02 accepted.
 
-**Suggested files:** `package.json`, lockfile, `vite.config.ts`, `src/types/*`, `src/data/*`, `src/analytics/*`, `src/components/*`, `scripts/prepare_data.py`, `tests/*`, docs as needed.
+1. Add `d3-geo` 27-state map using approved TopoJSON; default seller-origin, destination toggle; click state produces correct field filter.
+2. Build D3 monthly trend with fixed full-history X-domain and click-month date selection; show selected range without hiding remaining historical months; no P0 drag brushing.
+3. Build d3-sankey with **top 15 directed item-count links**, same-state flows preserved, mappable-coverage label and accessible link/node selection using `set_flow_pair`.
+4. Ensure all charts derive from canonical selectors; use D3 for layouts, React for SVG. Test every chart in both themes and at desktop/mobile widths as it is built, and add accessible control equivalents.
 
-**Tests:** Python input/output assertions; Vitest metrics/selectors; TS typecheck and production build. Verify zero-denominator, multi-seller, inclusive date, delivery-date semantics.
+**Tests/gate:** Correct global cross-filter behavior, no stale selections, valid map IDs, top-N reconciliation, chart empty/low-N states, readable dual theme. WU-04 next.
 
-**Exit gate:** Local app starts; data loads without silent fallback; accurate four KPI values; all applicable tests pass; provenance is disclosed in UI.
+### WU-04 — Order explorer, full integration and local acceptance
 
-### WU-02 — D3 geographic and delivery analytics
+**Prerequisite:** WU-03 accepted.
 
-**Prerequisites:** WU-01 accepted.
+1. Implement TanStack Table one row per eligible order with search/sort/25-per-page pagination; detail panel shows complete items and separately labeled full-order amounts. Financial columns in table are **matching-item** totals.
+2. Ensure charts can drill through to matching order cohort; keyboard/focus, missing fields and zero-item display checked.
+3. Complete the manual P0 walkthrough in `TESTING_AND_ACCEPTANCE.md` using actual source data; validate responsive design/theme contrast and latency, record actual file sizes/timings.
+4. Run all available TS typecheck, Vitest, Python checks, production build and Vite preview; README includes accurate local commands and license disclaimer. No public deploy.
 
-**Actions**
-1. Render Brazil choropleth with real state codes, selectable metric, legend, keyboard-accessible state selection and tooltips. **Default to seller origins**, provide a destination toggle and bind map selection to the correct filter dimension.
-2. Build monthly order/delivery trend using D3 scales; ensure date filtering and percentage denominators match KPIs.
-3. Add `d3-sankey` for seller state → destination state item contributions, with bounded top-N and a displayed-share indicator.
-4. Route all chart interactions into a **single** shared filter model. Display removable filter chips and clear/reset.
-5. Provide meaningful no-data states, responsive chart bounds, and readable legends.
+**Tests/gate:** All P0 checks passed or remaining defects explicitly listed, documented and not claimed complete. Report genuine browser inspection results, not only theoretical correctness.
 
-**Tests:** Chart aggregation/selectors, click→filter→other charts updates, top-N sum reconciliation, keyboard affordances, no-data rendering.
-
-**Exit gate:** State or category selection changes KPIs, map, trend, Sankey, and filters coherently. All map and Sankey claims are accurately labeled.
-
-### WU-03 — Order explorer, integration, QA and local acceptance
-
-**Prerequisites:** WU-02 accepted.
-
-**Actions**
-1. Add TanStack Table: search, sort, paginate; one row per matching order; detail drawer/panel with dates, status, item/category/seller and freight data.
-2. Add drill-through from aggregate visualizations to underlying **matching** order records.
-3. Check filters composition, cancellation/undelivered handling, missing translation, no matching orders, and repeated clear/select cycles.
-4. Run typecheck, lint if configured, unit/component tests, Python validation, and production build; add a reproducible E2E smoke checklist (Playwright if available).
-5. Check desktop/mobile layouts, keyboard navigation and **both themes** (including D3 SVG axes, legends, tooltips), static asset URLs in local dev and production preview.
-6. Update README with installation, raw data acquisition, transform commands, local run/preview commands, and public-repository data caveats.
-7. Do not add hosted deployment workflows or modify GitHub repository settings; deployment is not part of the POC.
-
-**Exit gate:** All required P0 walkthroughs in `TESTING_AND_ACCEPTANCE.md` pass, outstanding issues documented, and local Vite dev/build/preview are verified. No public deployment is required or claimed.
-
-## 6. Cross-WU test and quality gate
-
-At each WU finish, report:
-- Exactly what changed (files/commits/branch).
-- Commands executed and outcomes (include errors and unresolved failures).
-- Data provenance and dataset size actually used, if applicable.
-- Tests executed vs. tests **not** executed.
-- Remaining issues and severity.
-- Whether exit criteria passed.
-- What the next WU needs.
-
-Do not treat a generated source file as proof of an executed app. Do not say visuals passed human review based solely on code. Never silently skip failed tests. Avoid large snapshots, snapshots of transient charts, and overly broad refactors.
-
-## 7. Agent handoff template
-
-At completion of each authorized WU, respond using exactly these headings:
+## Final report format (mandatory for every WU)
 
 ```md
 ## Work Unit
-WU-XX — <name>
+WU-XX — Title
 
 ## Status
 PASS | PARTIAL | BLOCKED
 
 ## Changes
-- <paths and concise explanations>
+- Files/branch/commits and outcome
 
 ## Validation
-- PASS: `<command>` — <result>
-- FAIL: `<command>` — <error>
-- NOT RUN: <check> — <reason>
+- PASS: command + observed result
+- FAIL: command + observed error
+- NOT RUN: check + reason
 
-## Data / Provenance
-- <real dataset or labeled fixture, rows, source/license status>
+## Data and Provenance
+- Source files, actual counts/output bytes if applicable; license status
 
 ## Known Issues
-- <severity, symptom, mitigation>
+- Severity, symptom and action needed
 
 ## Next Allowed Work
-- <next WU and prerequisites; do not start without authorization>
+- Next WU, unmet prerequisites, and explicit stop
 ```
 
-## 8. Start prompts for Copilot, Codex or ChatGPT
+## Reusable prompts
 
-**Inspection-only prompt (no changes):**
+**Inspection-only:**
+> Read `AGENTS.md`, `README.md`, and all `docs/*.md`. Do not create/edit files, install packages or execute project commands. Report branch/working tree, source availability, scope, architecture, canonical data semantics, WUs, blockers and next eligible WU. Await authorization.
 
-> Inspect this repository, read `README.md`, `docs/WORK_UNITS.md`, and all other `docs/*.md`. Do not create, edit, install, or execute anything yet. Report the repository status, available datasets, architecture understanding, WU dependencies, and blockers. Identify the next eligible WU but do not implement it.
+**Implement single WU:**
+> Read and obey `docs/WORK_UNITS.md` and all referenced specs. Implement **WU-XX only** after verifying prerequisites. Keep changes within WU scope; run relevant tests; report actual outcomes in the mandatory handoff format. Stop after the WU gate; do not start the next WU.
 
-**Implementation prompt (one WU only):**
-
-> Read `docs/WORK_UNITS.md` and every referenced specification first. Implement **WU-XX only** (replace XX with the authorized number). Respect all prerequisites, data provenance rules, scope limits and stop gates. Execute relevant tests, report actual results using the handoff template, and stop; do not start the next WU.
-
-**Review-only prompt:**
-
-> Review the latest WU changes against `docs/WORK_UNITS.md` and `docs/TESTING_AND_ACCEPTANCE.md`. Do not edit anything. Identify correctness bugs, schema mismatches, test gaps, scope drift, and security/licensing risks, ordered by severity. Verify claims only with available evidence.
-
-## 9. Decision precedence and escalation
-
-When documents conflict:
-1. Explicit current user instructions
-2. `docs/DATA_SPECIFICATION.md` for source grain, metric and filter semantics
-3. `docs/TESTING_AND_ACCEPTANCE.md` for acceptance thresholds
-4. `docs/PRODUCT_AND_FEATURES.md` for feature priorities
-5. `docs/ARCHITECTURE.md` for technology boundaries
-6. `docs/VISUALIZATION_AND_UX.md` for presentation
-7. `docs/IMPLEMENTATION_PLAN.md` for sequencing
-8. This WU document for execution and handoff mechanics
-
-If any conflict changes a P0 metric or published data rights, **stop and ask** rather than invent a rule. For noncritical ambiguity, implement the simplest compliant choice, document it, and continue.
-
-## 10. Non-goals for AI agents
-
-This is not a request to:
-- Rewrite the specs or restructure the repo without cause.
-- Automatically implement every WU.
-- Import unrelated packages or build general-purpose libraries.
-- Claim proprietary shipping tracking data exists.
-- Treat sample records as genuine Olist outcomes.
-- Commit or publish source/raw data without review.
-- Require Codex or ChatGPT Work; a normal coding session with GitHub tools is acceptable when authorized.
+**Review-only:**
+> Inspect latest WU changes versus `docs/WORK_UNITS.md`, `docs/DATA_SPECIFICATION.md`, and `docs/TESTING_AND_ACCEPTANCE.md`. Do not modify anything. Report concrete bugs, grain/filter inconsistencies, missing checks, license risks and discrepancies in severity order.
