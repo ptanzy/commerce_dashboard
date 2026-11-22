@@ -1,0 +1,2 @@
+# Offline ETL only. No Pandas or geolocation processing required.
+duckdb>=1.1,<2

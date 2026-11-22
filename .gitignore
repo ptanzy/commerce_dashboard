@@ -3,6 +3,7 @@
 
 # Generated analytical datasets
 /data/processed/
+/public/data/
 
 # Python artifacts
 __pycache__/
@@ -11,3 +12,4 @@ __pycache__/
 # Node artifacts
 node_modules/
 dist/
+/dist-test/

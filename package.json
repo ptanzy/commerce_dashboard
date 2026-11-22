@@ -1,0 +1,17 @@
+{
+  "name": "commerce-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WU-01 data-contract and analytical-domain test harness (UI in WU-02)",
+  "type": "commonjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}
+
