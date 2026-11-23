@@ -1,17 +1,34 @@
 {
   "name": "commerce-dashboard",
   "private": true,
-  "version": "0.1.0",
-  "description": "WU-01 data-contract and analytical-domain test harness (UI in WU-02)",
+  "version": "0.2.0",
+  "description": "Local Olist delivery intelligence dashboard — WU-02 React foundation",
   "type": "commonjs",
   "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs"
   },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^26.1.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
+    "vite": "^6.3.0",
     "vitest": "^3.2.0"
   }
 }
-

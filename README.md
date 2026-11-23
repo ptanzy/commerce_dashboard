@@ -1,6 +1,6 @@
 # Commerce Delivery Intelligence — Documentation Baseline v2
 
-A **local-only** historical Olist e-commerce delivery dashboard in development, demonstrating React, TypeScript, D3 and analytically correct cross-filtering. The repo contains completed WU-00 reconnaissance and the partial WU-01 preprocessing/analytics implementation. **It does not yet contain a finished application.**
+A **local-only** historical Olist e-commerce delivery dashboard in development, demonstrating React, TypeScript, D3 and analytically correct cross-filtering. WU-00 and WU-01 are implemented and checked on the developer machine. WU-02 adds a React shell and real-data KPI/filter UI; **D3 charts and the order explorer remain separate upcoming units.**
 
 ## Locked decisions
 
@@ -32,13 +32,13 @@ The six required CSVs are listed in `docs/DATA_SPECIFICATION.md`. The source geo
 | `docs/IMPLEMENTATION_PLAN.md` | Two-day aspiration and five WU sequence |
 | `docs/DECISIONS_AND_RISKS.md` | Accepted decisions and remaining source risks |
 
-WU-00 reports: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. WU-01 implementation handoff: `docs/WU01_HANDOFF.md`.
+WU-00 reports: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. WU-01 implementation handoff: `docs/WU01_HANDOFF.md`. WU-02 implementation handoff: `docs/WU02_HANDOFF.md`.
 
 ## Starting development
 
 Read every document first. Request an **inspection-only readiness review** or explicitly authorize a **single WU**. The project currently has five gated WUs: source verification (00), ETL/metrics (01), React shell/KPIs (02), D3 visuals (03), order explorer/QA (04). Authorization for planning or docs updates **does not** authorize application implementation.
 
-WU-01 commands appear below, with executed checks and pending dependency-dependent checks distinguished in `docs/WU01_HANDOFF.md`.
+WU-01 data commands and WU-02 React commands appear below, with actual executed checks distinguished from pending local acceptance in the corresponding handoffs.
 
 ## Recommended .gitignore entries (verify before WU-01)
 
@@ -95,3 +95,48 @@ final verification in `docs/DATA_PROVENANCE.md` after the command succeeds.
 See `docs/WU01_HANDOFF.md` for executed verification, environmental blockers,
 and the remaining acceptance gate. The presence of commands here does not
 imply every one was executed in the assistant environment.
+
+## WU-02 React dashboard shell — implementation review
+
+WU-02 adds the **local Vite React/TypeScript dashboard shell** with Tailwind,
+responsive dark/light presentation, shared filters, verified schema loading,
+four live-data KPI cards, filter chips, error/loading/empty states, and UI tests.
+It does **not** implement the D3 geographic map, monthly chart, Sankey, or order
+explorer; those are WU-03 and WU-04 work. Chart areas are explicitly marked
+as future work rather than showing misleading placeholder data.
+
+The WU-01 Python pipeline must have already written the three files
+`public/data/orders.json`, `items.json`, and `metadata.json` on your computer;
+those files are Git-ignored and are **not** included in the source ZIP or GitHub.
+Regenerate them if missing:
+
+```powershell
+python scripts/prepare_data.py --input data/raw/olist.zip --output public/data
+```
+
+From the repository root, on `feature/dashboard-poc`:
+
+```powershell
+npm install                 # Update package-lock.json for React/Vite/Tailwind/RTL
+npm run typecheck           # Full TypeScript check
+npm test                    # Vitest analytics + React Testing Library
+npm run test:node           # Separate Node analytics regression tests
+npm run build               # Production Vite build (base: '/')
+npm run dev                 # Local UI at http://127.0.0.1:5173/
+```
+
+Optional: `npm run preview` after building, to inspect production assets locally.
+The UI reads static JSON from `/data/`; no runtime backend exists. Errors in
+missing/corrupted files are shown on-screen with a reproduction command.
+The default view selects **all** historical valid purchase dates, has no seller,
+customer or category filter, and initially uses **dark** mode. Light/dark choice
+is persisted in localStorage; filter selection does not reset when toggling.
+
+Verify manually at ~1440px and ~390px, including mobile date inputs, theme
+contrast, keyboard tab navigation, reset/clear chips, and a no-results filter
+combination. `docs/WU02_HANDOFF.md` records actual execution evidence and
+remaining local acceptance checks.
+
+**Lockfile:** WU-02 introduces new dependencies. Run `npm install` on the local
+development machine and commit the resulting updated `package-lock.json` with
+WU-02. Do not commit `node_modules`, `dist`, or `public/data`.

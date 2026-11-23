@@ -6,6 +6,17 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "rootDir": "src",
-    "declaration": false
-  }
+    "declaration": false,
+    "types": []
+  },
+  "include": [
+    "src/domain/**/*.ts",
+    "src/data/indexes.ts",
+    "src/data/validate.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-test"
+  ]
 }
