@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { DashboardContent, App } from '../../src/app/App';
 import { dataset, orders, items, manifest } from './fixtures';
 import { THEME_STORAGE_KEY } from '../../src/app/theme';
@@ -22,7 +22,8 @@ describe('WU-02 React shell and KPI/filter integration', () => {
     expect(metricsText('kpi-amber')).toBe('5.5 days');
     expect(metricsText('kpi-blue')).toBe('16.3%');
     expect(screen.getByText(/All historical data · No filters applied/)).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('3 of 3 orders');
+    const filterPanel = screen.getByRole('region', { name: 'Dashboard filters' });
+    expect(within(filterPanel).getByRole('status')).toHaveTextContent('3 of 3 orders');
   });
 
   it('seller and category filters must match the same item, with money from matching items only', () => {
@@ -98,7 +99,7 @@ describe('WU-02 local loading and theme', () => {
     expect(metricsText('kpi-indigo')).toBe('3');
     expect(screen.getByText('The numbers at a glance')).toBeInTheDocument();
     expect(screen.getByRole('button',{name:'Switch to light theme'})).toBeInTheDocument();
-    expect(vi.mocked(fetch).mock.calls).toHaveLength(3);
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => /\/(orders|items|metadata)\.json$/.test(url))).toHaveLength(3);
   });
 
   it('persists light theme independently of seller/category filters across remounts', async () => {

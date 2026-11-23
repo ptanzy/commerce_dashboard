@@ -4,6 +4,7 @@ Run: python -m unittest discover -s tests -p 'test_*.py' -v
 """
 from __future__ import annotations
 
+import json
 import csv
 from datetime import datetime, date
 from io import StringIO
@@ -71,6 +72,14 @@ class GeoTests(unittest.TestCase):
         self.assertEqual(result['states'],27)
         self.assertEqual(result['arcs'],27)
         self.assertEqual(topology['objects']['estados']['geometries'][0]['properties'],{'SIGLA':'AC','Estado':'AC'})
+        # TopoJSON standard: Polygon.arcs = [[arcId], ...], not [arcId].
+        first = topology['objects']['estados']['geometries'][0]
+        self.assertEqual(first['arcs'], [[0]])
+        self.assertIsInstance(first['arcs'][0], list)
+        with self.assertRaisesRegex(ValueError, 'TopoJSON ring'):
+            broken = json.loads(json.dumps(topology))
+            broken['objects']['estados']['geometries'][0]['arcs'] = [0]
+            validate_topology(broken)
         self.assertNotIn('Total',str(topology))
         with self.assertRaises(ValueError):
             convert_geojson({'type':'FeatureCollection','features':features[:-1]})
@@ -92,9 +101,60 @@ class GeoTests(unittest.TestCase):
         diagnostics = {}
         topology = convert_geojson({'type':'FeatureCollection','features':features}, diagnostics=diagnostics)
         self.assertEqual(validate_topology(topology)['states'], 27)
-        self.assertEqual(diagnostics, {'collapsedPolygons':1,'collapsedHoles':0})
+        self.assertEqual(diagnostics['collapsedPolygons'],1)
+        self.assertEqual(diagnostics['collapsedHoles'],0)
         pe = next(g for g in topology['objects']['estados']['geometries'] if g['id']=='PE')
         self.assertEqual(len(pe['arcs']), 1)
+        self.assertEqual(len(pe['arcs'][0]), 1)
+        self.assertEqual(len(pe['arcs'][0][0]), 1)
+
+    def test_rewinds_d3_exterior_and_hole_rings_after_quantization(self):
+        """Prevents tiny inverted polygons from filling the whole Mercator frame."""
+        features = []
+        for i, code in enumerate(sorted(STATES)):
+            x = -75 + i
+            # Source exterior is counterclockwise, contrary to D3's rule.
+            exterior = [[x, -10], [x+0.5, -10], [x+0.5, -9.5],
+                        [x, -9.5], [x, -10]]
+            geometry = {'type': 'Polygon', 'coordinates': [exterior]}
+            if code == 'PE':
+                # Source hole is clockwise, contrary to D3's rule.
+                hole = [[x+.1, -9.9], [x+.1, -9.6], [x+.4, -9.6],
+                        [x+.4, -9.9], [x+.1, -9.9]]
+                # A second tiny polygon is still drawable but has the wrong
+                # winding; this mirrors the real Pernambuco micro-polygons.
+                tiny = [[-35, -8], [-34.999, -8], [-34.9995, -7.999], [-35, -8]]
+                geometry = {'type': 'MultiPolygon', 'coordinates': [[exterior, hole], [tiny]]}
+            features.append({'type': 'Feature', 'id': code,
+                             'properties': {'SIGLA': code}, 'geometry': geometry})
+        diagnostics = {}
+        topology = convert_geojson({'type': 'FeatureCollection', 'features': features}, diagnostics=diagnostics)
+        self.assertEqual(validate_topology(topology)['states'], 27)
+        self.assertGreater(diagnostics['rewoundExteriorRings'], 0)
+        self.assertEqual(diagnostics['rewoundHoleRings'], 1)
+        pe = next(g for g in topology['objects']['estados']['geometries'] if g['id'] == 'PE')
+        self.assertEqual(len(pe['arcs']), 2)
+        self.assertEqual(len(pe['arcs'][0]), 2)
+        # Verify the validator rejects a reverse-wound arc, not just malformed
+        # nesting or non-closed coordinate rings.
+        broken = json.loads(json.dumps(topology))
+        first_ring_arc = pe['arcs'][0][0][0]
+        encoded = broken['arcs'][first_ring_arc]
+        x = y = 0
+        raw = []
+        for dx, dy in encoded:
+            x += dx
+            y += dy
+            raw.append((x, y))
+        raw.reverse()
+        previous = (0, 0)
+        reversed_arc = []
+        for point in raw:
+            reversed_arc.append([point[0] - previous[0], point[1] - previous[1]])
+            previous = point
+        broken['arcs'][first_ring_arc] = reversed_arc
+        with self.assertRaisesRegex(ValueError, 'winding'):
+            validate_topology(broken)
 
     def test_unclosed_source_ring_is_not_silently_discarded(self):
         features = []

@@ -24,13 +24,14 @@ TRANSLATE = [-180.0, -90.0]
 
 
 def convert_geojson(source: dict, *, diagnostics: dict | None = None) -> dict:
-    """Encode all 27 states, discarding only sub-grid-size rings.
+    """Encode all 27 states, normalizing D3 winding and discarding collapsed rings.
 
     Quantizing very small valid islands can leave fewer than three unique
     vertices. This is expected loss of detail at the chosen map precision,
     **not** malformed input. Suppress those islands/holes, count them for the
     generation report, and keep at least one polygon for every state.
     An originally malformed or unclosed ring is still a hard error.
+    Exterior rings are clockwise and holes counterclockwise as required by D3.
     """
     if source.get("type") != "FeatureCollection":
         raise ValueError("Expected a FeatureCollection")
@@ -41,9 +42,15 @@ def convert_geojson(source: dict, *, diagnostics: dict | None = None) -> dict:
     arcs: list[list[list[int]]] = []
     geometries: list[dict] = []
     observed: set[str] = set()
-    dropped: dict[str, int] = {"collapsedPolygons": 0, "collapsedHoles": 0}
+    dropped: dict[str, int] = {"collapsedPolygons": 0, "collapsedHoles": 0,
+                              "rewoundExteriorRings": 0, "rewoundHoleRings": 0}
 
-    def encode_ring(points: list, state: str) -> int | None:
+    def signed_area_twice(ring: list[tuple[int, int]]) -> int:
+        """Planar signed area of quantized, closed longitude/latitude ring."""
+        return sum(ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1]
+                   for i in range(len(ring) - 1))
+
+    def encode_ring(points: list, state: str, *, is_hole: bool = False) -> int | None:
         if not isinstance(points, list) or len(points) < 4:
             raise ValueError(f"Malformed polygon ring in {state}: fewer than four positions")
         raw: list[tuple[float, float]] = []
@@ -72,6 +79,20 @@ def convert_geojson(source: dict, *, diagnostics: dict | None = None) -> dict:
         if absolute[0] != absolute[-1]:
             raise ValueError(f"Unexpected quantization closure failure in {state}")
 
+        area2 = signed_area_twice(absolute)
+        if area2 == 0:
+            # Tiny islands may survive as three distinct quantized points but
+            # become collinear, which is still not drawable geometry.
+            return None
+        # D3-geo uses clockwise exteriors and counterclockwise holes for
+        # regions smaller than a hemisphere. A single inverted island can
+        # make geoMercator.fitExtent interpret the *rest of the world* as land.
+        # Normalize *after* quantization because rounding can change a tiny
+        # ring's winding. Preserve its closing vertex when reversing.
+        if (area2 > 0 and not is_hole) or (area2 < 0 and is_hole):
+            absolute.reverse()
+            dropped["rewoundHoleRings" if is_hole else "rewoundExteriorRings"] += 1
+
         previous = (0, 0)
         encoded: list[list[int]] = []
         for point in absolute:
@@ -80,20 +101,22 @@ def convert_geojson(source: dict, *, diagnostics: dict | None = None) -> dict:
         arcs.append(encoded)
         return len(arcs) - 1
 
-    def encode_polygon(polygon: list, code: str) -> list[int] | None:
+    def encode_polygon(polygon: list, code: str) -> list[list[int]] | None:
         if not isinstance(polygon, list) or not polygon:
             raise ValueError(f"Missing exterior polygon ring for {code}")
         exterior = encode_ring(polygon[0], code)
         if exterior is None:
             dropped["collapsedPolygons"] += 1
             return None
-        encoded = [exterior]
+        # TopoJSON Polygon arcs are rings, each ring is an array of arc IDs.
+        # Because each source ring is stored as one standalone arc, wrap its ID.
+        encoded = [[exterior]]
         for hole in polygon[1:]:
-            index = encode_ring(hole, code)
+            index = encode_ring(hole, code, is_hole=True)
             if index is None:
                 dropped["collapsedHoles"] += 1
             else:
-                encoded.append(index)
+                encoded.append([index])
         return encoded
 
     for feature in features:
@@ -146,22 +169,49 @@ def validate_topology(topology: dict) -> dict:
         raise ValueError("Topological state coverage is not exactly 27 UFs")
     arcs = topology["arcs"]
     counter = Counter()
-    for feature in geometries:
-        rings = feature["arcs"] if feature["type"] == "Polygon" else [ring for polygon in feature["arcs"] for ring in polygon]
-        for index in rings:
-            if index < 0 or index >= len(arcs):
-                raise ValueError(f"Invalid arc reference {index}")
-            counter[index] += 1
-            if len(arcs[index]) < 4:
-                raise ValueError("Arc is too short")
-            absolute = [0, 0]
-            first = None
-            for dx,dy in arcs[index]:
-                absolute[0] += dx
-                absolute[1] += dy
-                if first is None: first = tuple(absolute)
-            if tuple(absolute) != first:
-                raise ValueError("Arc is not a closed ring")
+    for state in geometries:
+        shape_type = state["type"]
+        if shape_type == "Polygon":
+            polygons = [state["arcs"]]
+        elif shape_type == "MultiPolygon":
+            polygons = state["arcs"]
+        else:
+            raise ValueError(f"Unsupported topology geometry: {shape_type}")
+        for polygon in polygons:
+            if not isinstance(polygon, list) or not polygon:
+                raise ValueError("Invalid TopoJSON polygon rings")
+            for ring_index, ring in enumerate(polygon):
+                if not isinstance(ring, list) or not ring:
+                    raise ValueError("TopoJSON ring must be a nonempty array of arc indices")
+                for index in ring:
+                    if not isinstance(index,int) or index < 0 or index >= len(arcs):
+                        raise ValueError(f"Invalid arc reference {index}")
+                    counter[index] += 1
+                    if len(arcs[index]) < 4:
+                        raise ValueError("Arc is too short")
+                    absolute = [0, 0]
+                    first = None
+                    for dx,dy in arcs[index]:
+                        absolute[0] += dx
+                        absolute[1] += dy
+                        if first is None: first = tuple(absolute)
+                    if tuple(absolute) != first:
+                        raise ValueError("Arc is not a closed ring")
+                    # Prevent a reversed tiny polygon from turning the Brazil
+                    # map into an almost solid rectangle in d3-geo.
+                    ring_points = []
+                    x = y = 0
+                    for dx, dy in arcs[index]:
+                        x += dx
+                        y += dy
+                        ring_points.append((x, y))
+                    signed_area = sum(
+                        ring_points[i][0] * ring_points[i + 1][1] -
+                        ring_points[i + 1][0] * ring_points[i][1]
+                        for i in range(len(ring_points) - 1)
+                    )
+                    if (ring_index == 0 and signed_area >= 0) or (ring_index > 0 and signed_area <= 0):
+                        raise ValueError("Invalid polygon ring winding: D3 requires clockwise exteriors and counterclockwise holes")
     if set(counter) != set(range(len(arcs))):
         raise ValueError("Unreferenced arc in topology")
     return {"states":len(geometries),"arcs":len(arcs),"bytes":len(json.dumps(topology,separators=(',',':')))}

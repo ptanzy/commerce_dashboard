@@ -1,4 +1,4 @@
-# Commerce Delivery Intelligence — Documentation Baseline v2
+# Commerce Delivery Intelligence — Local Dashboard POC
 
 A **local-only** historical Olist e-commerce delivery dashboard in development, demonstrating React, TypeScript, D3 and analytically correct cross-filtering. WU-00 and WU-01 are implemented and checked on the developer machine. WU-02 adds a React shell and real-data KPI/filter UI; **D3 charts and the order explorer remain separate upcoming units.**
 
@@ -32,7 +32,7 @@ The six required CSVs are listed in `docs/DATA_SPECIFICATION.md`. The source geo
 | `docs/IMPLEMENTATION_PLAN.md` | Two-day aspiration and five WU sequence |
 | `docs/DECISIONS_AND_RISKS.md` | Accepted decisions and remaining source risks |
 
-WU-00 reports: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. WU-01 implementation handoff: `docs/WU01_HANDOFF.md`. WU-02 implementation handoff: `docs/WU02_HANDOFF.md`.
+WU-00 reports: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. Work-unit handoffs: `docs/WU01_HANDOFF.md`, `docs/WU02_HANDOFF.md`, and `docs/WU03_HANDOFF.md`. WU-02 implementation handoff: `docs/WU02_HANDOFF.md`.
 
 ## Starting development
 
@@ -140,3 +140,28 @@ remaining local acceptance checks.
 **Lockfile:** WU-02 introduces new dependencies. Run `npm install` on the local
 development machine and commit the resulting updated `package-lock.json` with
 WU-02. Do not commit `node_modules`, `dist`, or `public/data`.
+
+## WU-03 — linked D3 geographic and delivery visualizations
+
+WU-03 replaces the three visualization placeholders with interactive state geography, monthly trend context and a top-15 seller-to-customer Sankey diagram. It **does not** implement the WU-04 order explorer. All charts reuse the WU-01 analytical selectors and the WU-02 `useReducer` filters.
+
+After merging the WU-03 update into the existing repository (do not replace the repository directory or delete local `public/data/`), install the new D3/TopoJSON dependencies, update the lockfile, and validate:
+
+```powershell
+npm install
+npm run typecheck
+npm test
+npm run test:node
+npm run build
+npm run dev
+```
+
+Open `http://127.0.0.1:5173/` in a browser, and test both light/dark modes and desktop/mobile widths. The map requires the committed `public/geo/brazil-states.topojson` (27 UF geometries, `objects.estados`) and its MIT notice. **Regenerate it using the corrected WU-03 geography script even if the old file already exists:** run `python scripts/prepare_geo.py` from the repository root. The previous converter wrote the wrong TopoJSON ring nesting despite its own validation passing. The corrected geometry will have a new SHA-256 and must replace the previously committed asset together with its MIT notice. The two full Olist JSON facts and `metadata.json` remain local and Git-ignored at `public/data/`.
+
+**Map:** defaults to distinct seller-origin order counts, optionally switches to customer-destination counts, and retains independent seller/destination chips. Orders with multiple origin states may appear in multiple state counts. Accessible state-list buttons mirror the state map selection.
+
+**Trend:** shows purchase-month volume or on-time rate using the **non-date-filter cohort**. All historical months remain on the X-axis even after selecting a month; active date range highlights/mutes months rather than deleting them. The date selector remains keyboard accessible and can switch directly between months.
+
+**Sankey:** shows the top 15 `sellerState → customerState` pairs by **matching item contribution count**, not order count or physical shipment tracking. `origin:SP` and `dest:SP` are separate nodes, so same-state SP→SP flows remain. Keyboard-accessible flow buttons set both state filters atomically. The coverage percentage uses the number of mappable item records; unmappable records are disclosed separately.
+
+WU-03 code-generation validation and remaining acceptance checks are recorded in `docs/WU03_HANDOFF.md`. **Do not assume that source compilation, browser layout or screenshots have been verified until the local tests have run.**

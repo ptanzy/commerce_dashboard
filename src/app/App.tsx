@@ -1,6 +1,7 @@
 import { useMemo, useReducer } from 'react';
+import type { Dispatch } from 'react';
 import {
-  ArrowRight, ArrowUpRight, BarChart3, ChevronRight, CircleAlert, Database,
+  ArrowUpRight, BarChart3, CircleAlert, Database,
   GitBranch, Globe2, Layers3, MapPinned, Moon, RefreshCcw, Sun, Truck,
 } from 'lucide-react';
 import { filterReducer } from './filterReducer';
@@ -9,10 +10,15 @@ import { useTheme } from './theme';
 import type { DashboardTheme } from './theme';
 import type { DashboardDataset } from '../data/loader';
 import { selectCohort, computeMetrics } from '../domain/selectors';
+import type { Cohort } from '../domain/selectors';
+import type { Filters, FilterAction } from '../domain/types';
 import { DEFAULT_FILTERS } from '../domain/types';
 import { FilterPanel } from '../components/FilterPanel';
 import type { FilterOptions } from '../components/FilterPanel';
 import { KpiCards, KpiSkeletons } from '../components/KpiCards';
+import { BrazilMap } from '../charts/BrazilMap';
+import { DeliveryTrends } from '../charts/DeliveryTrends';
+import { ShippingSankey } from '../charts/ShippingSankey';
 
 function Header({theme, onToggle}: {theme: DashboardTheme;onToggle:()=>void}) {
   return <header className="topbar">
@@ -57,23 +63,26 @@ export function deriveFilterOptions(dataset: DashboardDataset): FilterOptions {
   };
 }
 
-function PlaceholderPanels() {
-  return <section className="upcoming-section" aria-labelledby="upcoming-heading">
+function ChartsSection({dataset, cohort, filters, dispatch}: {dataset: DashboardDataset; cohort: Cohort; filters: Filters; dispatch: Dispatch<FilterAction>}) {
+  return <section className="upcoming-section" aria-labelledby="patterns-heading">
     <div className="section-headline">
-      <div><div className="section-eyebrow">02 / EXPLORE THE PATTERNS</div><h2 id="upcoming-heading" className="content-heading">Beyond the numbers</h2></div>
-      <span className="workunit-label">Visualizations · WU-03</span>
+      <div><div className="section-eyebrow">02 / EXPLORE THE PATTERNS</div><h2 id="patterns-heading" className="content-heading">Beyond the numbers</h2></div>
+      <span className="workunit-label">Interactive geography · Monthly trends · State-to-state flows</span>
     </div>
-    <div className="future-grid">
-      <div className="future-card future-map">
-        <div className="future-heading"><span className="future-icon"><MapPinned size={19}/></span><span><strong>Geographic distribution</strong><small>Seller origins & customer destinations</small></span><ChevronRight size={17} className="future-chevron" aria-hidden="true" /></div>
-        <div className="future-body"><div className="placeholder-graphic"><Globe2 size={55} strokeWidth={1.1}/><span>27 Brazilian states</span></div><div className="future-overlay">Interactive state map · WU-03</div></div>
-      </div>
-      <div className="future-card future-trends">
-        <div className="future-heading"><span className="future-icon"><BarChart3 size={19}/></span><span><strong>Delivery trends</strong><small>Monthly order volume & punctuality</small></span><ChevronRight size={17} className="future-chevron" aria-hidden="true" /></div>
-        <div className="future-body"><div className="placeholder-graphic"><BarChart3 size={54} strokeWidth={1.1}/><span>Historical monthly trends</span></div><div className="future-overlay">Interactive timeline · WU-03</div></div>
-      </div>
+    <div className="chart-grid">
+      <section className="viz-card" aria-labelledby="map-heading">
+        <div className="viz-heading"><span className="future-icon"><MapPinned size={19} aria-hidden="true" /></span><div><h3 id="map-heading">Geographic distribution</h3><p>Seller origins & customer destinations</p></div></div>
+        <BrazilMap cohort={cohort} filters={filters} dispatch={dispatch}/>
+      </section>
+      <section className="viz-card" aria-labelledby="trend-heading">
+        <div className="viz-heading"><span className="future-icon"><BarChart3 size={19} aria-hidden="true" /></span><div><h3 id="trend-heading">Delivery trends</h3><p>Historical order volume and punctuality</p></div></div>
+        <DeliveryTrends index={dataset.index} filters={filters} dispatch={dispatch}/>
+      </section>
     </div>
-    <div className="sankey-coming"><span className="future-icon"><GitBranch size={18}/></span><span className="grow"><strong>Seller → customer flows</strong><small>Sankey visualization of matching item contributions</small></span><span className="coming-label">COMING IN WU-03</span><ArrowRight size={17} aria-hidden="true" /></div>
+    <section className="viz-card viz-sankey" aria-labelledby="flow-heading">
+      <div className="viz-heading"><span className="future-icon"><GitBranch size={19} aria-hidden="true" /></span><div><h3 id="flow-heading">Where orders originate—and where they go</h3><p>Top 15 seller-to-customer state relationships</p></div></div>
+      <ShippingSankey cohort={cohort} filters={filters} dispatch={dispatch}/>
+    </section>
   </section>;
 }
 
@@ -95,7 +104,7 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
     <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} />
     {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
     <KpiCards metrics={metrics} />
-    <PlaceholderPanels />
+    <ChartsSection dataset={dataset} cohort={cohort} filters={filters} dispatch={dispatch} />
     <DataFootnote dataset={dataset} />
   </>;
 }

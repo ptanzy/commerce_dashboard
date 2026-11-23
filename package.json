@@ -1,8 +1,8 @@
 {
   "name": "commerce-dashboard",
   "private": true,
-  "version": "0.2.0",
-  "description": "Local Olist delivery intelligence dashboard — WU-02 React foundation",
+  "version": "0.3.0",
+  "description": "Local Olist delivery intelligence dashboard — WU-03 D3 linked visualizations",
   "type": "commonjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -13,15 +13,25 @@
     "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs"
   },
   "dependencies": {
+    "d3-geo": "^3.1.1",
+    "d3-sankey": "^0.12.3",
+    "d3-scale": "^4.0.2",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "topojson-client": "^3.1.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.0",
+    "@types/d3-geo": "^3.1.1",
+    "@types/d3-sankey": "^0.12.4",
+    "@types/d3-scale": "^4.0.8",
+    "@types/geojson": "^7946.0.16",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-specification": "^1.0.5",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
     "jsdom": "^26.1.0",
