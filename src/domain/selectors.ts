@@ -113,6 +113,77 @@ export function computeMetrics(cohort: Cohort): Metrics {
   };
 }
 
+/** A mutually exclusive view of delivery outcomes over the distinct eligible order cohort.
+ * Early/on-time/late require valid delivered duration and a promised date.
+ * Unknown includes non-delivered and records without enough reliable delivery information.
+ */
+export interface DeliveryBreakdown {
+  early: number;
+  onTime: number;
+  late: number;
+  unknown: number;
+  eligible: number;
+  totalOrders: number;
+}
+
+export function deliveryBreakdown(cohort: Cohort): DeliveryBreakdown {
+  let early = 0, onTime = 0, late = 0;
+  for (const order of cohort.eligibleOrders) {
+    if (!isOnTimeEligible(order)) continue;
+    if (order.deliveryClassification === 'early') early++;
+    else if (order.deliveryClassification === 'on_time') onTime++;
+    else if (order.deliveryClassification === 'late') late++;
+  }
+  const eligible = early + onTime + late;
+  return { early, onTime, late, unknown: cohort.eligibleOrders.length - eligible,
+    eligible, totalOrders: cohort.eligibleOrders.length };
+}
+
+/** Each state counts DISTINCT orders. Multi-seller orders may belong to several origin states. */
+export interface StateDeliveryStats {
+  state: string;
+  distinctOrders: number;
+  durationCount: number;
+  onTimeNumerator: number;
+  onTimeDenominator: number;
+  onTimeRate: number | null;
+  medianDeliveryDays: number | null;
+}
+
+export function stateDeliveryStats(cohort: Cohort, dimension: 'origin' | 'destination'): ReadonlyMap<string, StateDeliveryStats> {
+  const orderById = new Map(cohort.eligibleOrders.map(order => [order.orderId, order]));
+  const grouped = new Map<string, Set<string>>();
+  const add = (state: string | null, id: string) => {
+    if (!state || !orderById.has(id)) return;
+    let ids = grouped.get(state);
+    if (!ids) { ids = new Set<string>(); grouped.set(state, ids); }
+    ids.add(id);
+  };
+  if (dimension === 'destination') {
+    for (const order of cohort.eligibleOrders) add(order.customerState, order.orderId);
+  } else {
+    for (const item of cohort.eligibleItems) add(item.sellerState, item.orderId);
+  }
+  const result = new Map<string, StateDeliveryStats>();
+  for (const [state, ids] of grouped) {
+    let onTimeDenominator = 0, onTimeNumerator = 0;
+    const durations: number[] = [];
+    for (const id of ids) {
+      const order = orderById.get(id)!;
+      if (isDeliveredDurationEligible(order)) durations.push(order.deliveryDays!);
+      if (isOnTimeEligible(order)) {
+        onTimeDenominator++;
+        if (order.deliveryClassification !== 'late') onTimeNumerator++;
+      }
+    }
+    result.set(state, {state, distinctOrders: ids.size, durationCount: durations.length,
+      onTimeDenominator, onTimeNumerator,
+      onTimeRate: onTimeDenominator ? onTimeNumerator / onTimeDenominator : null,
+      medianDeliveryDays: quantileR7(durations, 0.5)});
+  }
+  return result;
+}
+
 export interface MatchedMoney {
   matchedItemCount: number;
   priceBRL: number | null;
@@ -135,41 +206,67 @@ export function matchingOrderAmounts(cohort: Cohort): ReadonlyMap<string, Matche
   return output;
 }
 
+export type FlowMeasure = 'items' | 'freight' | 'value';
 export interface DirectedLink {
   source: string;
   target: string;
   sellerState: string;
   customerState: string;
   itemCount: number;
+  freightChargeBRL: number;
+  itemValueBRL: number;
+  /** Nonnegative weight used by Sankey; zero-weight pairs are omitted for monetary modes. */
+  weight: number;
 }
 export interface SankeySummary {
   links: readonly DirectedLink[];
+  measure: FlowMeasure;
   mappableItemCount: number;
   unmappableItemCount: number;
   shownItemCount: number;
+  /** The denominator includes only valid, mappable values for the selected measurement. */
+  mappableWeight: number;
+  shownWeight: number;
+  invalidWeightItems: number;
   coverage: number | null;
 }
 
-export function topDirectedFlows(cohort: Cohort, count = 15): SankeySummary {
+/** Sort and rank TOP 15 separately by the selected measure. Do not treat null money as BRL zero. */
+export function topDirectedFlows(cohort: Cohort, count = 15, measure: FlowMeasure = 'items'): SankeySummary {
   const byPair = new Map<string, DirectedLink>();
-  let mappableItemCount = 0, unmappableItemCount = 0;
+  let mappableItemCount = 0, unmappableItemCount = 0, invalidWeightItems = 0;
+  let mappableWeight = 0;
   for (const item of cohort.eligibleItems) {
     if (!item.sellerState || !item.customerState) { unmappableItemCount++; continue; }
     mappableItemCount++;
     const key = `${item.sellerState}\u0000${item.customerState}`;
-    const found = byPair.get(key);
-    if (found) found.itemCount++;
-    else byPair.set(key, {
-      source: `origin:${item.sellerState}`, target: `dest:${item.customerState}`,
-      sellerState: item.sellerState, customerState: item.customerState, itemCount: 1,
-    });
+    let link = byPair.get(key);
+    if (!link) {
+      link = {source:`origin:${item.sellerState}`, target:`dest:${item.customerState}`,
+        sellerState:item.sellerState,customerState:item.customerState,
+        itemCount:0,freightChargeBRL:0,itemValueBRL:0,weight:0};
+      byPair.set(key,link);
+    }
+    link.itemCount++;
+    if (item.priceBRL !== null && Number.isFinite(item.priceBRL) && item.priceBRL >= 0)
+      link.itemValueBRL += item.priceBRL;
+    if (item.freightChargeBRL !== null && Number.isFinite(item.freightChargeBRL) && item.freightChargeBRL >= 0)
+      link.freightChargeBRL += item.freightChargeBRL;
+    const selectedValue = measure === 'items' ? 1 : measure === 'freight' ? item.freightChargeBRL : item.priceBRL;
+    if (selectedValue !== null && Number.isFinite(selectedValue) && selectedValue >= 0)
+      mappableWeight += selectedValue;
+    else invalidWeightItems++;
   }
-  const links = [...byPair.values()]
-    .sort((a, b) => b.itemCount - a.itemCount || a.sellerState.localeCompare(b.sellerState) || a.customerState.localeCompare(b.customerState))
+  for (const link of byPair.values()) link.weight = measure === 'items' ? link.itemCount :
+    measure === 'freight' ? link.freightChargeBRL : link.itemValueBRL;
+  const links = [...byPair.values()].filter(link => link.weight > 0)
+    .sort((a,b) => b.weight - a.weight || a.sellerState.localeCompare(b.sellerState) || a.customerState.localeCompare(b.customerState))
     .slice(0, Math.max(0, count));
   const shownItemCount = links.reduce((sum, link) => sum + link.itemCount, 0);
-  return { links, mappableItemCount, unmappableItemCount, shownItemCount,
-    coverage: mappableItemCount > 0 ? shownItemCount / mappableItemCount : null };
+  const shownWeight = links.reduce((sum, link) => sum + link.weight, 0);
+  return {links, measure, mappableItemCount, unmappableItemCount, shownItemCount,
+    mappableWeight, shownWeight, invalidWeightItems,
+    coverage: mappableWeight > 0 ? Math.min(1, shownWeight / mappableWeight) : null};
 }
 
 /** Seller-origin counts overlap: multi-seller orders may count in multiple states. */

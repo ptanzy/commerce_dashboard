@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs tests/orderExplorer.node.cjs tests/wu05.node.cjs"
+    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs tests/orderExplorer.node.cjs tests/wu05.node.cjs tests/wu06.node.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

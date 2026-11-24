@@ -106,7 +106,7 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
     <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} />
     {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
     {filters.focusedFlow ? <div className="flow-focus-banner" role="status"><strong>Focused flow: {filters.focusedFlow.sellerState} → {filters.focusedFlow.customerState}</strong><span>KPIs and order explorer reflect this specific relationship. Map and Sankey retain the broader filter context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
-    <KpiCards metrics={metrics} />
+    <KpiCards metrics={metrics} cohort={cohort} />
     <ChartsSection dataset={dataset} cohort={contextCohort} filters={filters} dispatch={dispatch} />
     <OrderExplorer index={dataset.index} cohort={cohort} filters={filters} />
     <DataFootnote dataset={dataset} />

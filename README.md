@@ -226,3 +226,13 @@ npm run dev
 ```
 
 Test both dark/light themes, desktop/mobile layouts, the multi-selection checklists, the focused Sankey drill-down, and the order explorer before committing WU-05. Original and generated Olist records remain Git-ignored.
+
+
+## WU-06 expanded delivery analytics (post-POC)
+
+- Five KPI cards, including **P95 delivery duration** computed from eligible valid delivered orders; delivery outcome segmented bar excludes unknown/unqualified deliveries from the colored denominator and discloses their distinct-order count separately.
+- The Brazil map now switches between **distinct order volume, on-time delivery %, and median delivery days** in seller-origin or customer-destination view. Performance map shades omit low-sample states (`n < 30`), and tooltips/list rows disclose the underlying sample size. Top volume and lowest on-time-rate state rankings use the broader map context.
+- The Sankey now switches between **item contributions, valid freight charges (BRL), and valid item prices (BRL)**. The top 15 pairs and weighted coverage re-rank independently for each metric; missing monetary values are not treated as zero. Selection still focuses KPI and order data while the broader chart remains visible. Freight is **charged**, not a carrier's actual cost.
+- Detailed contracts: `docs/WU06_SPEC.md`. New Node regressions: `tests/wu06.node.cjs`; new UI tests: `tests/ui/wu06.test.tsx`. No new data sources or runtime API.
+
+Run `npm install`, `npm run typecheck`, `npm test`, `npm run test:node`, `npm run build` before committing. Confirm all three map/Sankey measures, sample warnings, flow focus, dark/light and narrow layout using the real local data.

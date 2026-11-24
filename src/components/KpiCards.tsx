@@ -1,6 +1,7 @@
-import { ArrowUpRight, Clock3, PackageCheck, Percent, ShoppingBag } from 'lucide-react';
+import { ArrowUpRight, Clock3, PackageCheck, Percent, ShoppingBag, Timer } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { Metrics } from '../domain/selectors';
+import type { Cohort, Metrics } from '../domain/selectors';
+import { DeliveryBreakdown } from './DeliveryBreakdown';
 import { formatDays, formatInteger, formatPercentage } from './format';
 
 interface CardProps {
@@ -8,7 +9,7 @@ interface CardProps {
   value: string;
   note: string;
   icon: ReactNode;
-  tone: 'indigo' | 'mint' | 'amber' | 'blue';
+  tone: 'indigo' | 'mint' | 'amber' | 'blue' | 'violet';
   caption: string;
 }
 
@@ -25,7 +26,7 @@ function KpiCard({ label, value, note, icon, tone, caption }: CardProps) {
   </article>;
 }
 
-export function KpiCards({ metrics }: {metrics: Metrics}) {
+export function KpiCards({ metrics, cohort }: {metrics: Metrics; cohort: Cohort}) {
   return <section aria-labelledby="kpi-heading" className="metrics-section">
     <div className="section-headline">
       <div>
@@ -42,18 +43,21 @@ export function KpiCards({ metrics }: {metrics: Metrics}) {
         tone="mint" caption="Delivered by promised calendar date" />
       <KpiCard label="Median delivery" value={formatDays(metrics.medianDeliveryDays)} icon={<Clock3 size={22} />}
         note={`${formatInteger(metrics.deliveredDurationCount)} valid durations`} tone="amber" caption="Purchase → customer delivery" />
+      <KpiCard label="P95 delivery" value={formatDays(metrics.p95DeliveryDays)} icon={<Timer size={22} />}
+        note="95% of valid deliveries took no longer than this" tone="violet" caption="R-7 percentile · purchase → delivery" />
       <KpiCard label="Freight / item price" value={formatPercentage(metrics.freightToPriceRatio)} icon={<Percent size={22} />}
         note="Customer freight charges ÷ matching item price" tone="blue"
         caption={metrics.invalidPriceItems || metrics.invalidFreightItems
           ? `${formatInteger(metrics.invalidPriceItems)} invalid prices · ${formatInteger(metrics.invalidFreightItems)} invalid freight`
           : 'Item-grain metric · BRL amounts'} />
     </div>
+    <DeliveryBreakdown cohort={cohort}/>
   </section>;
 }
 
 export function KpiSkeletons() {
   return <section aria-label="Loading dashboard metrics" className="metrics-section">
     <div className="section-headline"><div><div className="section-eyebrow">01 / PERFORMANCE OVERVIEW</div><h2 className="content-heading">The numbers at a glance</h2></div></div>
-    <div className="kpi-grid">{[0,1,2,3].map(i => <div className="kpi-card" key={i} aria-hidden="true"><div className="skeleton skeleton-icon"/><div className="skeleton skeleton-line"/><div className="skeleton skeleton-number"/><div className="skeleton skeleton-line"/></div>)}</div>
+    <div className="kpi-grid">{[0,1,2,3,4].map(i => <div className="kpi-card" key={i} aria-hidden="true"><div className="skeleton skeleton-icon"/><div className="skeleton skeleton-line"/><div className="skeleton skeleton-number"/><div className="skeleton skeleton-line"/></div>)}</div>
   </section>;
 }

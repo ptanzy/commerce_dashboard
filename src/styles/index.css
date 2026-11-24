@@ -436,3 +436,44 @@ h1,h2,h3 { font-family:'Segoe UI',Arial,system-ui,sans-serif; }
 .trend-focus-bar.trend-muted {opacity:.30;}
 @media(prefers-reduced-motion:reduce){.sankey-ribbon{transition:none;}}
 @media(max-width:479px){.multi-filter-menu{min-width:0;}}
+
+/* WU-06 — richer delivery analytics; semantic colors work in both themes. */
+.kpi-grid {grid-template-columns:repeat(5,minmax(0,1fr));}
+.kpi-violet {--kpi-accent:#b79aff;--kpi-bg:rgba(183,154,255,.12);}
+.delivery-breakdown {margin-top:17px;border:1px solid var(--stroke);background:var(--panel);border-radius:12px;padding:19px 22px;box-shadow:0 5px 26px var(--shadow);}
+.breakdown-header {display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;}
+.breakdown-header h3 {font-size:14px;color:var(--heading);font-weight:800;}
+.breakdown-header p,.breakdown-footnote {font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px;}
+.breakdown-count {font-size:11px;font-weight:700;color:var(--muted);}
+.breakdown-bar {display:flex;height:19px;border-radius:7px;overflow:hidden;background:var(--panel-subtle);border:1px solid var(--stroke);margin:17px 0 12px;}
+.breakdown-slice {height:100%;min-width:0;}
+.breakdown-slice + .breakdown-slice {border-left:1px solid var(--panel);}
+.breakdown-early {background:#38bba7;}
+.breakdown-on-time {background:#83a8ef;}
+.breakdown-late {background:#ee9778;}
+.breakdown-legend {display:flex;flex-wrap:wrap;gap:9px 22px;}
+.breakdown-legend-item {display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;}
+.breakdown-legend-item strong {color:var(--heading);font-variant-numeric:tabular-nums;}
+.breakdown-legend-item small {color:var(--faint);font-size:10px;}
+.breakdown-dot {display:inline-block;width:9px;height:9px;border-radius:3px;}
+.breakdown-footnote {margin-top:13px;}
+.breakdown-empty {padding:14px;margin:12px 0;color:var(--muted);background:var(--panel-subtle);border-radius:7px;font-size:11px;}
+.map-measure-controls,.sankey-measure-controls {display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+.map-measure-controls button,.sankey-measure-controls button {padding:7px 10px;border:1px solid var(--stroke);background:var(--panel-subtle);color:var(--muted);font-size:11px;font-weight:700;border-radius:7px;}
+.map-measure-controls button:hover,.sankey-measure-controls button:hover {border-color:var(--accent);color:var(--heading);}
+.map-measure-controls button.is-active,.sankey-measure-controls button.is-active {border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+.state-rankings {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px;}
+.state-rankings section {border:1px solid var(--stroke);border-radius:9px;min-width:0;overflow:hidden;background:var(--panel-subtle);padding:11px 12px;}
+.state-rankings h4 {font-size:11px;color:var(--heading);font-weight:800;margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px;}
+.state-rankings h4 small {font-size:9px;color:var(--faint);font-weight:500;}
+.state-rankings ol {list-style:decimal inside;}
+.state-rankings li {display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--stroke);font-size:10px;color:var(--muted);padding:6px 0;}
+.state-rankings li:last-child {border-bottom:0;}
+.state-rankings li span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.state-rankings li strong {white-space:nowrap;color:var(--heading);font-variant-numeric:tabular-nums;}
+.state-rankings li strong small {color:var(--faint);font-weight:500;}
+.state-rankings p {font-size:10px;color:var(--muted);}
+@media (max-width:1190px) {.kpi-grid {grid-template-columns:repeat(2,minmax(0,1fr));}.kpi-grid>.kpi-card:last-child {grid-column:span 2;}}
+@media (max-width:479px) {.kpi-grid {grid-template-columns:1fr;}.kpi-grid>.kpi-card:last-child {grid-column:auto;}.state-rankings {grid-template-columns:1fr;}.delivery-breakdown {padding:15px;}.breakdown-legend {gap:10px 14px;}}
+.state-measure-value {display:flex;flex-direction:column;align-items:flex-end;text-align:right;line-height:1.45;}
+.state-measure-value small {font-size:8px;color:var(--faint);}
