@@ -138,3 +138,25 @@ PASS | PARTIAL | BLOCKED
 
 **Review-only:**
 > Inspect latest WU changes versus `docs/WORK_UNITS.md`, `docs/DATA_SPECIFICATION.md`, and `docs/TESTING_AND_ACCEPTANCE.md`. Do not modify anything. Report concrete bugs, grain/filter inconsistencies, missing checks, license risks and discrepancies in severity order.
+
+
+### WU-06 — Expanded Delivery Analytics (post-POC; owner-authorized)
+
+**Prerequisite:** WU-05 accepted and committed. Full contracts/measurement semantics in `docs/WU06_SPEC.md`, which supersede the old P1 deferments for these features only.
+
+1. P95 KPI, delivery outcome breakdown (including unknown), on-time and median map measures with 30-order observation warnings, state volume/late-delivery rankings.
+2. Sankey freight/value/item weight selection, with monetary validity, weighted top-15 ranking and coverage. Context-preserving WU-05 focus remains intact.
+3. Typecheck, Node/RTL/Python tests, production build and real Olist local reconciliation. Validate dark/light and small screens.
+
+**Gate:** Do not commit until local UI/build/visual and analytics checks pass. No WU-07 scope.
+
+### WU-07 — Advanced exploration and multi-flow Sankey selection (post-POC; owner-authorized)
+
+**Prerequisite:** WU-06 accepted/committed. Read `docs/WU07_SPEC.md`. This WU supersedes WU-05's single-pair focus with `focusedFlows: FlowPair[]`.
+
+1. Multi-flow exact-pair OR focus (plain click replaces; Ctrl/Cmd-click and keyboard list add/remove); pinned selected links when changing Sankey measure; context remains visible.
+2. Matching-category leaderboard, delivery-day early/late distribution, and equal-length previous-period metrics with defensible denominators.
+3. Filtered order CSV download with missing-value and formula-injection protections; local, validated named saved filter views.
+4. Updated Node + React tests, documentation, full local build and browser checks before acceptance. No new datasets, services, or public deployment.
+
+**Gate:** All relevant analytical/React regressions and local real-source checks must pass before commit. Record deferred or unavailable checks explicitly. No WU-08 work authorized.

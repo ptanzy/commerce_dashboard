@@ -13,7 +13,10 @@
     "src/domain/**/*.ts",
     "src/data/indexes.ts",
     "src/data/validate.ts",
-    "src/app/filterReducer.ts"
+    "src/app/filterReducer.ts",
+    "src/domain/exploration.ts",
+    "src/domain/exportCsv.ts",
+    "src/domain/savedViews.ts"
   ],
   "exclude": [
     "node_modules",

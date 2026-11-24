@@ -14,7 +14,7 @@ const items = [
   {orderId:'multi',orderItemId:2,sellerId:'s2',sellerState:'RJ',customerState:'MG',category:'health_beauty',priceBRL:200,freightChargeBRL:40},
 ];
 const index=buildDataIndex([makeOrder('multi',2),makeOrder('zero',0)],items);
-const unfiltered={purchaseDateFrom:null,purchaseDateTo:null,customerStates:[],sellerStates:[],categories:[],focusedFlow:null};
+const unfiltered={purchaseDateFrom:null,purchaseDateTo:null,customerStates:[],sellerStates:[],categories:[],focusedFlows:[]};
 
 test('WU-04 explorer preserves zero-item orders with unavailable money',()=>{
   const rows=selectExplorerOrders(selectCohort(index,unfiltered));

@@ -236,3 +236,28 @@ Test both dark/light themes, desktop/mobile layouts, the multi-selection checkli
 - Detailed contracts: `docs/WU06_SPEC.md`. New Node regressions: `tests/wu06.node.cjs`; new UI tests: `tests/ui/wu06.test.tsx`. No new data sources or runtime API.
 
 Run `npm install`, `npm run typecheck`, `npm test`, `npm run test:node`, `npm run build` before committing. Confirm all three map/Sankey measures, sample warnings, flow focus, dark/light and narrow layout using the real local data.
+
+## WU-07 — Advanced exploration and multi-flow focus
+
+**New capabilities:** Ctrl/Cmd-click Sankey ribbons to add/remove directed flow relationships; normal ribbon click replaces focus (and clicking the only selected ribbon clears). The ranked flow list is multi-selectable without modifiers. All focused relationships are an OR of **exact origin→destination item pairs**; map/Sankey keep global context while KPI cards, trends, order explorer, category leaderboard, timing distribution, previous-period comparison, and CSV export use the focused cohort. Switching Sankey measures retains selected flows, pinning positive-weight links that fall outside the current top 15.
+
+The new **category leaderboard** offers distinct orders, item value, freight charged, and on-time delivery rate (at least 30 eligible deliveries required for reliable ranking). The **delivery timing distribution** counts calendar days early/late relative to a promise, excluding unknown/invalid dates. The **previous-period panel** needs both date bounds; it compares exactly as many days immediately before, only when that window lies inside the historical dataset. All non-date filters and selected flows apply to both periods.
+
+**Export filtered orders (CSV)** downloads only dashboard-cohort order fields and matching-item amounts, **not** full-order totals, PII, or explorer-local text search results. Missing numeric values remain blank; spreadsheet formula-like strings are escaped. **Saved views** capture filters, dates and flow selections locally in this browser, including Load / Rename / Delete. Local storage may be disabled or cleared; presets do not sync.
+
+After extracting WU-07 files into the existing repo:
+
+```powershell
+cd C:\Users\ptanz\job_search\commerce_dashboard
+npm install
+python -m unittest discover -s tests -p "test_*.py" -v
+npm run typecheck
+npm test
+npm run test:node
+npm run build
+node tests/check_olist.cjs
+node tests/check_explorer.cjs
+npm run dev
+```
+
+Validate on the real local Olist files, confirm the browser layout in both themes and a narrow viewport, and review the staged files before committing. **Do not stage `data/raw/`, `public/data/`, or privately generated source-derived record files.** Detailed feature and acceptance contracts: [`docs/WU07_SPEC.md`](docs/WU07_SPEC.md) and [`docs/WU07_HANDOFF.md`](docs/WU07_HANDOFF.md). WU-05/WU-06 singular-focus descriptions are historical; this extension supersedes them.

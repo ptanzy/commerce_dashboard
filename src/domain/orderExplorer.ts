@@ -52,7 +52,7 @@ export function selectOrderDetail(index: DataIndex, cohort: Cohort, filters: Fil
   const matchedItems = fullItems.filter((item) =>
     (filters.sellerStates.length === 0 || (item.sellerState !== null && filters.sellerStates.includes(item.sellerState))) &&
     (filters.categories.length === 0 || filters.categories.includes(item.category)) &&
-    (filters.focusedFlow === null || (item.sellerState === filters.focusedFlow.sellerState && item.customerState === filters.focusedFlow.customerState)),
+    (filters.focusedFlows.length === 0 || filters.focusedFlows.some(pair=>item.sellerState===pair.sellerState && item.customerState===pair.customerState)),
   );
   return {
     order, fullItems,

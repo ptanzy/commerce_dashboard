@@ -50,7 +50,7 @@ export interface Filters {
   sellerStates: readonly string[];
   categories: readonly string[];
   /** Context-preserving detail focus. Never applied to the Sankey overview cohort. */
-  focusedFlow: FlowPair | null;
+  focusedFlows: readonly FlowPair[];
 }
 export type MultiDimension = 'customerStates' | 'sellerStates' | 'categories';
 export type FilterAction =
@@ -58,11 +58,13 @@ export type FilterAction =
   | { type: 'toggle_value'; dimension: MultiDimension; value: string }
   | { type: 'clear_dimension'; dimension: MultiDimension }
   | { type: 'focus_flow'; sellerState: string; customerState: string }
+  | { type: 'toggle_flow_focus'; sellerState: string; customerState: string }
+  | { type: 'restore_filters'; filters: Filters }
   | { type: 'clear_flow_focus' }
   | { type: 'clear_all' };
 
 export const DEFAULT_FILTERS: Readonly<Filters> = Object.freeze({
   purchaseDateFrom: null, purchaseDateTo: null,
   customerStates: Object.freeze([] as string[]), sellerStates: Object.freeze([] as string[]),
-  categories: Object.freeze([] as string[]), focusedFlow: null,
+  categories: Object.freeze([] as string[]), focusedFlows: Object.freeze([] as FlowPair[]),
 });

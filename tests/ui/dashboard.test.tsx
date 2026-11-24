@@ -78,14 +78,37 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
     expect(metricsText('kpi-indigo')).toBe('2');
     expect(screen.getByRole('button',{name:'Clear Origin: RJ filter'})).toBeInTheDocument();
   });
+  it('summarizes multiple focused flows in the filter bar while preserving per-flow Sankey controls', () => {
+    render(<DashboardContent dataset={dataset}/>);
+    const choices = within(screen.getByRole('group',{name:'Focus a directed seller-to-customer state pair'}));
+    fireEvent.click(choices.getByRole('button',{name:/SP.*MG.*1 items/}));
+    fireEvent.click(choices.getByRole('button',{name:/RJ.*SP.*1 items/}));
+
+    const filterBar = within(screen.getByRole('region',{name:'Dashboard filters'}));
+    expect(filterBar.getByRole('button',{name:'Clear 2 focused flows filter'})).toBeInTheDocument();
+    expect(filterBar.queryAllByRole('button',{name:/Clear Focused flow:/})).toHaveLength(0);
+    expect(screen.getByRole('button',{name:'Remove focused flow SP→MG'})).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Remove focused flow RJ→SP'})).toBeInTheDocument();
+    expect(metricsText('kpi-indigo')).toBe('2');
+
+    // Summary clear removes only flow focus; global filter selections must survive.
+    choose('Seller origins','SP · São Paulo');
+    expect(filterBar.getByRole('button',{name:'Clear Origin: SP filter'})).toBeInTheDocument();
+    expect(filterBar.getByRole('button',{name:'Clear 1 focused flow filter'})).toBeInTheDocument();
+    fireEvent.click(filterBar.getByRole('button',{name:'Clear 1 focused flow filter'}));
+    expect(filterBar.queryByRole('button',{name:/Clear \d+ focused flow/})).not.toBeInTheDocument();
+    expect(filterBar.getByRole('button',{name:'Clear Origin: SP filter'})).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Remove focused flow SP→MG'})).not.toBeInTheDocument();
+    expect(metricsText('kpi-indigo')).toBe('1');
+  });
   it('focus action never replaces global multi-selects, toggles, and clears when invalidated', () => {
     const first=filterReducer(DEFAULT_FILTERS,{type:'toggle_value',dimension:'sellerStates',value:'SP'});
     const both=filterReducer(first,{type:'toggle_value',dimension:'sellerStates',value:'RJ'});
     const focused=filterReducer(both,{type:'focus_flow',sellerState:'SP',customerState:'MG'});
     expect(focused.sellerStates).toEqual(['RJ','SP']);
-    expect(focused.focusedFlow).toEqual({sellerState:'SP',customerState:'MG'});
-    expect(filterReducer(focused,{type:'focus_flow',sellerState:'SP',customerState:'MG'}).focusedFlow).toBeNull();
-    expect(filterReducer(focused,{type:'toggle_value',dimension:'sellerStates',value:'SP'}).focusedFlow).toBeNull();
+    expect(focused.focusedFlows).toEqual([{sellerState:'SP',customerState:'MG'}]);
+    expect(filterReducer(focused,{type:'focus_flow',sellerState:'SP',customerState:'MG'}).focusedFlows).toEqual([]);
+    expect(filterReducer(focused,{type:'toggle_value',dimension:'sellerStates',value:'SP'}).focusedFlows).toEqual([]);
     expect(filterReducer(focused,{type:'clear_all'})).toEqual(DEFAULT_FILTERS);
   });
 });

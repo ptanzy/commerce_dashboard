@@ -40,7 +40,7 @@ test('WU-05 focus acts as a distinct directed item-pair constraint without mutat
   assert.equal(computeMetrics(focus).freightChargeBRL,10);
   assert.equal(computeMetrics(context).distinctOrders,4);
   assert.equal(topDirectedFlows(context,15).links.length,allFlows.links.length);
-  const details=selectOrderDetail(index,focus,f({customerStates:['MG','BA'],sellerStates:['SP','RJ'],focusedFlow:{sellerState:'SP',customerState:'MG'}}),'multi');
+  const details=selectOrderDetail(index,focus,f({customerStates:['MG','BA'],sellerStates:['SP','RJ'],focusedFlows:[{sellerState:'SP',customerState:'MG'}]}),'multi');
   assert.deepEqual([...details.matchingItemIds],[1]);
   assert.equal(details.matchingTotals.priceBRL,100);
   assert.equal(details.fullTotals.priceBRL,300);
@@ -52,9 +52,9 @@ test('WU-05 flow focus toggles without overwriting global selection groups',()=>
   assert.deepEqual(focused.sellerStates,state.sellerStates);
   assert.deepEqual(focused.customerStates,state.customerStates);
   assert.deepEqual(focused.categories,state.categories);
-  assert.deepEqual(focused.focusedFlow,{sellerState:'SP',customerState:'MG'});
-  assert.equal(filterReducer(focused,{type:'focus_flow',sellerState:'SP',customerState:'MG'}).focusedFlow,null);
-  assert.equal(filterReducer(focused,{type:'clear_flow_focus'}).focusedFlow,null);
+  assert.deepEqual(focused.focusedFlows,[{sellerState:'SP',customerState:'MG'}]);
+  assert.deepEqual(filterReducer(focused,{type:'focus_flow',sellerState:'SP',customerState:'MG'}).focusedFlows,[]);
+  assert.deepEqual(filterReducer(focused,{type:'clear_flow_focus'}).focusedFlows,[]);
 });
 test('WU-05 group toggles, chip-equivalent removals, and incompatible focus reconciliation',()=>{
   const first=filterReducer(DEFAULT_FILTERS,{type:'toggle_value',dimension:'sellerStates',value:'SP'});
@@ -63,7 +63,7 @@ test('WU-05 group toggles, chip-equivalent removals, and incompatible focus reco
   assert.deepEqual(filterReducer(both,{type:'toggle_value',dimension:'sellerStates',value:'RJ'}).sellerStates,['SP']);
   const focus=filterReducer(both,{type:'focus_flow',sellerState:'SP',customerState:'MG'});
   const removed=filterReducer(focus,{type:'toggle_value',dimension:'sellerStates',value:'SP'});
-  assert.equal(removed.focusedFlow,null);
+  assert.deepEqual(removed.focusedFlows,[]);
   assert.deepEqual(removed.sellerStates,['RJ']);
   assert.deepEqual(filterReducer(both,{type:'clear_dimension',dimension:'sellerStates'}).sellerStates,[]);
   assert.deepEqual(filterReducer(both,{type:'clear_all'}),DEFAULT_FILTERS);

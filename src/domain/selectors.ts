@@ -31,11 +31,16 @@ export function selectCohort(index: DataIndex, filters: Filters): Cohort {
   return { eligibleOrders, eligibleItems, eligibleOrderIds };
 }
 
-/** Drill-down only: preserve the broader global cohort in charts that need context. */
-export function selectFocusedFlowCohort(context: Cohort, focus: FlowPair | null): Cohort {
-  if (!focus) return context;
+/** Drill-down only: exact directed pairs, OR across pairs, AND with global context.
+ * Empty selection leaves the global cohort intact, including no-item orders.
+ * A single pair argument remains accepted for older analytical test callers.
+ */
+export function selectFocusedFlowCohort(context: Cohort, focuses: FlowPair | readonly FlowPair[] | null): Cohort {
+  const pairs = focuses === null ? [] : Array.isArray(focuses) ? focuses : [focuses as FlowPair];
+  if (!pairs.length) return context;
+  const pairKeys=new Set(pairs.map(pair=>`${pair.sellerState}\u0000${pair.customerState}`));
   const eligibleItems = context.eligibleItems.filter(item =>
-    item.sellerState === focus.sellerState && item.customerState === focus.customerState);
+    pairKeys.has(`${item.sellerState ?? ''}\u0000${item.customerState ?? ''}`));
   const eligibleOrderIds = new Set(eligibleItems.map(item => item.orderId));
   return {
     eligibleOrders: context.eligibleOrders.filter(order => eligibleOrderIds.has(order.orderId)),
@@ -232,7 +237,7 @@ export interface SankeySummary {
 }
 
 /** Sort and rank TOP 15 separately by the selected measure. Do not treat null money as BRL zero. */
-export function topDirectedFlows(cohort: Cohort, count = 15, measure: FlowMeasure = 'items'): SankeySummary {
+export function topDirectedFlows(cohort: Cohort, count = 15, measure: FlowMeasure = 'items', pinned: readonly FlowPair[] = []): SankeySummary {
   const byPair = new Map<string, DirectedLink>();
   let mappableItemCount = 0, unmappableItemCount = 0, invalidWeightItems = 0;
   let mappableWeight = 0;
@@ -259,9 +264,16 @@ export function topDirectedFlows(cohort: Cohort, count = 15, measure: FlowMeasur
   }
   for (const link of byPair.values()) link.weight = measure === 'items' ? link.itemCount :
     measure === 'freight' ? link.freightChargeBRL : link.itemValueBRL;
-  const links = [...byPair.values()].filter(link => link.weight > 0)
-    .sort((a,b) => b.weight - a.weight || a.sellerState.localeCompare(b.sellerState) || a.customerState.localeCompare(b.customerState))
-    .slice(0, Math.max(0, count));
+  const ranked = [...byPair.values()].filter(link => link.weight > 0)
+    .sort((a,b) => b.weight - a.weight || a.sellerState.localeCompare(b.sellerState) || a.customerState.localeCompare(b.customerState));
+  const links = ranked.slice(0, Math.max(0, count));
+  const included = new Set(links.map(link=>`${link.sellerState}\u0000${link.customerState}`));
+  // Preserve previously focused pairs when measure changes re-rank the top 15.
+  for (const pair of pinned) {
+    const key=`${pair.sellerState}\u0000${pair.customerState}`;
+    const link=byPair.get(key);
+    if (link && link.weight>0 && !included.has(key)) {links.push(link);included.add(key);}
+  }
   const shownItemCount = links.reduce((sum, link) => sum + link.itemCount, 0);
   const shownWeight = links.reduce((sum, link) => sum + link.weight, 0);
   return {links, measure, mappableItemCount, unmappableItemCount, shownItemCount,
@@ -306,11 +318,11 @@ export function monthDateRange(month: string): {from: string; to: string} {
   return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
 }
 
-export function monthlyTrendContext(index: DataIndex, filters: Filters, lowSampleThreshold = 30, focus: FlowPair | null = null): readonly MonthMetric[] {
+export function monthlyTrendContext(index: DataIndex, filters: Filters, lowSampleThreshold = 30, focuses: FlowPair | readonly FlowPair[] | null = null): readonly MonthMetric[] {
   if (!index.fullHistoryMin || !index.fullHistoryMax) return [];
   // Remove only the date constraint; keep all current seller/customer/category constraints.
   const contextFilters = { ...filters, purchaseDateFrom: null, purchaseDateTo: null };
-  const cohort = selectFocusedFlowCohort(selectCohort(index, contextFilters), focus);
+  const cohort = selectFocusedFlowCohort(selectCohort(index, contextFilters), focuses);
   const byMonth = new Map<string, {orders: number; onTime: number; eligible: number}>();
   for (const order of cohort.eligibleOrders) {
     const month = order.purchaseDate!.slice(0, 7);

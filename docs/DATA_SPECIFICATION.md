@@ -138,3 +138,7 @@ For a delivered order with delivery before purchase, **force `deliveryDays=null`
 - Profile local ZIP and decide how invalid financial rows are excluded or quarantined; state rules in `DATA_PROFILE.md` and test them.
 - Pin exact geographic TopoJSON source (see candidate links in `DECISIONS_AND_RISKS.md`), record license and inspect if feature IDs use UF strings or IBGE numeric codes. Require **27 unique state features** and a complete mapping to two-letter codes before map acceptance.
 - Benchmark realistic JSON payload and selector latency before adding optimization. Do not assume an estimated 65–75MB is factual.
+
+## WU-07 extension — supersedes singular focusedFlow references above
+
+The new canonical field is `focusedFlows: FlowPair[]`. Empty means global cohort; nonempty means **OR between exact `(sellerState, customerState)` item pairs**, AND with the global date/customer/seller/category filters. Do not combine selected origins/destinations as independent disjunctions and accidentally introduce cross-pairs. Order totals remain distinct; matched-item money includes only items in at least one selected directed pair. Filtered CSV exports these eligible orders only. No extra source columns or ETL exports. Refer to `docs/WU07_SPEC.md`.

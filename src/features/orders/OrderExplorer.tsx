@@ -132,7 +132,7 @@ function OrderDetailDrawer({detail, onClose}: {detail: OrderDetail;onClose:()=>v
           <div><span>Full order ({fullTotals.matchedItemCount} items)</span><strong>{formatBRL(fullTotals.priceBRL)}</strong><small>Full-order item price</small><strong>{formatBRL(fullTotals.freightChargeBRL)}</strong><small>Full-order freight charged</small></div>
         </div>
         <h4>Original order items</h4>
-        <p className="detail-help">The full order is shown for context. Highlighted items match the current seller and category filters. Charges are customer freight charges, not logistics costs.</p>
+        <p className="detail-help">The full order is shown for context. Highlighted items match the current seller, category, destination and focused-flow selections. Charges are customer freight charges, not logistics costs.</p>
         {fullItems.length ? <div className="detail-table-wrap"><table className="detail-item-table"><thead><tr><th>Item</th><th>Seller origin</th><th>Category</th><th>Price</th><th>Freight</th><th>Filter</th></tr></thead>
           <tbody>{fullItems.map(item=><DetailRow key={item.orderItemId} item={item} matched={matchingItemIds.has(item.orderItemId)}/>)}</tbody></table></div>
           : <p className="detail-no-items">This order has no item records in the Olist item table; monetary totals are unavailable (—).</p>}

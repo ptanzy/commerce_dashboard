@@ -20,6 +20,8 @@ import { BrazilMap } from '../charts/BrazilMap';
 import { DeliveryTrends } from '../charts/DeliveryTrends';
 import { ShippingSankey } from '../charts/ShippingSankey';
 import { OrderExplorer } from '../features/orders/OrderExplorer';
+import { SavedViews } from '../components/SavedViews';
+import { CategoryLeaderboard, DelayDistributionChart, PeriodComparisonPanel, CsvExportButton } from '../components/AdvancedExploration';
 
 function Header({theme, onToggle}: {theme: DashboardTheme;onToggle:()=>void}) {
   return <header className="topbar">
@@ -98,16 +100,23 @@ function DataFootnote({ dataset }: {dataset: DashboardDataset}) {
 export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
   const [filters, dispatch] = useReducer(filterReducer, { ...DEFAULT_FILTERS });
   const contextCohort = useMemo(() => selectCohort(dataset.index, filters), [dataset.index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories]);
-  const cohort = useMemo(() => selectFocusedFlowCohort(contextCohort, filters.focusedFlow), [contextCohort, filters.focusedFlow]);
+  const cohort = useMemo(() => selectFocusedFlowCohort(contextCohort, filters.focusedFlows), [contextCohort, filters.focusedFlows]);
   const metrics = useMemo(() => computeMetrics(cohort), [cohort]);
   const options = useMemo(() => deriveFilterOptions(dataset), [dataset]);
 
   return <>
     <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} />
+    <SavedViews filters={filters} dispatch={dispatch} />
     {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
-    {filters.focusedFlow ? <div className="flow-focus-banner" role="status"><strong>Focused flow: {filters.focusedFlow.sellerState} → {filters.focusedFlow.customerState}</strong><span>KPIs and order explorer reflect this specific relationship. Map and Sankey retain the broader filter context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
+    {filters.focusedFlows.length ? <div className="flow-focus-banner" role="status"><strong>{filters.focusedFlows.length} focused {filters.focusedFlows.length===1?'flow':'flows'}</strong><span>KPIs, trends, and order explorer include any selected directed pair, but count each matching order once. Sankey and map retain context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
     <KpiCards metrics={metrics} cohort={cohort} />
+    <PeriodComparisonPanel index={dataset.index} filters={filters} metrics={metrics} />
     <ChartsSection dataset={dataset} cohort={contextCohort} filters={filters} dispatch={dispatch} />
+    <section className="upcoming-section advanced-section" aria-labelledby="advanced-heading">
+      <div className="section-headline"><div><div className="section-eyebrow">03 / DEEPER DELIVERY INTELLIGENCE</div><h2 id="advanced-heading" className="content-heading">Explore the details</h2></div><span className="workunit-label">Category mix · Calendar-day delays</span></div>
+      <div className="advanced-grid"><CategoryLeaderboard cohort={cohort}/><DelayDistributionChart cohort={cohort}/></div>
+    </section>
+    <CsvExportButton cohort={cohort}/>
     <OrderExplorer index={dataset.index} cohort={cohort} filters={filters} />
     <DataFootnote dataset={dataset} />
   </>;

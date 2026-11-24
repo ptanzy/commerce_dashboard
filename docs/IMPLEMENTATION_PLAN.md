@@ -42,3 +42,7 @@ For each authorized WU, report branch, changed files, exact commands/results, ac
 ## Definition of done
 
 All P0 stories in `PRODUCT_AND_FEATURES.md`, invariants in `DATA_SPECIFICATION.md`, and gates in `TESTING_AND_ACCEPTANCE.md` are actually verified using real Olist data (or explicitly approved labeled fixtures). `npm run build` works; app runs locally; no provenance/route misrepresentations; unresolved P1 is openly deferred.
+
+### WU-07 owner-authorized post-POC extension
+
+Multi-flow Sankey focus, category rankings, calendar-day delays, previous period comparisons, client-only CSV, and local saved filter views. Acceptance and data semantics in `docs/WU07_SPEC.md`. Do not extend to new data sources, backend, or public deployment.

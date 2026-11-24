@@ -57,3 +57,7 @@ GPS routes, carriers, vehicle fleets, shipment tracking, inventory, payments, re
 ### Feature-to-data support
 
 Order/delivery dates and statuses are in `olist_orders_dataset.csv`; items and freight charges in `olist_order_items_dataset.csv`; seller states in `olist_sellers_dataset.csv`; customer states in `olist_customers_dataset.csv`; categories/translations in products and category translation CSVs. No carrier, actual road routes or customer shipment GPS. Revenue and true shipping operating costs must not be inferred from `freight_value`.
+
+## WU-07 owner-authorized extension (supersedes P1 deferments)
+
+Adds Sankey **multi-flow exact-pair focus**, a product-category leaderboard, delivery-day histogram, previous equal-length period comparison, filtered-order CSV download, and named local saved filter views. The original historical noncommercial/local-only product constraint, no-PII export and all mixed-grain accounting invariants remain in force. Canonical extension requirements: `docs/WU07_SPEC.md`.

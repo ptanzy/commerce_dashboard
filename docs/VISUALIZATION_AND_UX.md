@@ -68,3 +68,9 @@ P0: distinct eligible orders, on-time percentage (eligible delivered + estimated
 - Both dark and light are P0. Use CSS custom properties/Tailwind tokens for surfaces, labels, grids, selection, warning and focus colors; header toggle persists chosen mode in localStorage with safe failure fallback, defaults dark, does not modify cohort. Verify axes, SVG labels, legends and tooltips in both.
 - Keyboard operability of filters, order table, and accessible equivalents for map/Sankey selection; visible focus indicators, chart text alternatives, tooltips that do not trap focus and reduced-motion support.
 - No browser screenshots may be claimed as inspected unless actually captured. Show loading/empty/error states with visible and actionable text.
+
+## WU-07 extension — current interaction design
+
+Ctrl/Cmd-click a Sankey ribbon to add/remove an exact directed pair; plain-click replaces the focused selection (click sole selected ribbon again to clear). The accessible ranked flow button list supports additive toggles without modifiers. Keep contextual links visible but fade unselected ones; selected flow chips and the Clear focus action persist when switching Sankey measures. Pin selected positive-weight flows that fall below the current top 15. A focused zero-weight flow may have no monetary-mode ribbon but must remain in the drill-down and chips.
+
+The order-grain category ranking and delivery-day histogram appear in an expanded analysis section. Equal-length previous-period results appear only for complete valid ranges. CSV export targets the current *dashboard* cohort and explicitly does not apply the order explorer's text search. Saved views are stored locally with Save new, Load, Rename, Delete. See `docs/WU07_SPEC.md` for edge cases.

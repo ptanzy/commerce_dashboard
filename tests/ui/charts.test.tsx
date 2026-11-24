@@ -80,7 +80,15 @@ describe('WU-05 contextual trend and non-destructive Sankey focus',()=>{
     expect(document.querySelectorAll('.sankey-ribbon-dim').length).toBeGreaterThan(0);
     fireEvent.mouseLeave(selection);
     fireEvent.click(selection);
-    expect(screen.getByRole('button',{name:'Clear Focused flow: RJ → MG filter'})).toBeInTheDocument();
+    // Main filter panel displays one summary chip.
+    expect(screen.getByRole('button', {
+      name: 'Clear 1 focused flow filter'
+    })).toBeInTheDocument();
+
+    // Sankey panel retains the individually removable flow.
+    expect(screen.getByRole('button', {
+      name: 'Remove focused flow RJ→MG'
+    })).toBeInTheDocument();
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('1');
     expect(within(choices).getAllByRole('button')).toHaveLength(linkCount);
     expect(selection).toHaveAttribute('aria-pressed','true');

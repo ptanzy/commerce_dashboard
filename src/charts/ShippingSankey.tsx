@@ -46,51 +46,55 @@ export function makeFlowLayout(summary: ReturnType<typeof topDirectedFlows>): {n
 export function ShippingSankey({cohort,filters,dispatch}: {cohort:Cohort;filters:Filters;dispatch:Dispatch<FilterAction>}) {
   const [hoveredPair,setHoveredPair] = useState<string | null>(null);
   const [measure,setMeasure] = useState<FlowMeasure>('items');
-  const summary = useMemo(() => topDirectedFlows(cohort,15,measure), [cohort,measure]);
+  const summary = useMemo(() => topDirectedFlows(cohort,15,measure,filters.focusedFlows), [cohort,measure,filters.focusedFlows]);
   const layout = useMemo(() => makeFlowLayout(summary), [summary]);
   const path = useMemo(() => sankeyLinkHorizontal<FlowNodeExtra,FlowLinkExtra>(), []);
-  const focusKey = filters.focusedFlow ? flowKey(filters.focusedFlow.sellerState,filters.focusedFlow.customerState) : null;
-  const selectedLink = summary.links.find(link => flowKey(link.sellerState,link.customerState) === focusKey);
-  const hoveringVisible = hoveredPair !== null && summary.links.some(link => flowKey(link.sellerState,link.customerState) === hoveredPair);
-  // Do not dim every link if a previously focused pair has fallen out of the current top 15.
-  const emphasized = hoveringVisible ? hoveredPair : selectedLink ? focusKey : null;
-  const selectPair = (sellerState: string, customerState: string) => dispatch({type:'focus_flow',sellerState,customerState});
+  const focusKeys = useMemo(() => new Set(filters.focusedFlows.map(pair=>flowKey(pair.sellerState,pair.customerState))), [filters.focusedFlows]);
+  const displayedKeys = useMemo(() => new Set(summary.links.map(link=>flowKey(link.sellerState,link.customerState))), [summary]);
+  const hoveringVisible = hoveredPair !== null && displayedKeys.has(hoveredPair);
+  const emphasized = hoveringVisible ? new Set([...focusKeys,hoveredPair!]) : focusKeys.size ? focusKeys : null;
+  const selectPair = (sellerState: string, customerState: string, additive=false) => dispatch({type:additive?'toggle_flow_focus':'focus_flow',sellerState,customerState});
 
   return <div className="viz-body sankey-body">
-    <div className="viz-controls"><span className="flow-topline"><strong>{formatWeight(summary.shownWeight,measure)}</strong> shown <span className="flow-summary-sep">/</span> <strong>{formatWeight(summary.mappableWeight,measure)}</strong> eligible mappable</span><span className="viz-meta">Top 15 directed pairs</span></div>
+    <div className="viz-controls"><span className="flow-topline"><strong>{formatWeight(summary.shownWeight,measure)}</strong> shown <span className="flow-summary-sep">/</span> <strong>{formatWeight(summary.mappableWeight,measure)}</strong> eligible mappable</span><span className="viz-meta">Top 15 directed pairs{summary.links.length > 15 ? ` + ${summary.links.length-15} selected` : ''}</span></div>
     <div className="sankey-measure-controls" role="group" aria-label="Sankey measurement">
       {(Object.keys(MEASURES) as FlowMeasure[]).map(key=><button key={key} type="button" aria-pressed={measure===key} className={measure===key?'is-active':''} onClick={()=>setMeasure(key)}>{MEASURES[key]}</button>)}
     </div>
-    <p className="viz-caption">Rank and size flows by {MEASURES[measure].toLowerCase()}. Click a ribbon to focus KPIs and orders without removing other flows. Hover to preview; click again to clear. Relationships represent matching items, not physical delivery routes.</p>
-    {filters.focusedFlow ? <div className="sankey-focus-details" role="status">
-      <div><strong>Focused: {focusKey}</strong><span>{selectedLink ? `${formatWeight(selectedLink.weight,measure)} · ${formatInteger(selectedLink.itemCount)} items · ${formatPercentage(summary.mappableWeight ? selectedLink.weight/summary.mappableWeight : null)} of eligible ${MEASURES[measure].toLowerCase()}` : 'The focused pair is outside the current top-15 overview.'}</span></div>
+    <p className="viz-caption">Rank and size flows by {MEASURES[measure].toLowerCase()}. Click a ribbon to focus one flow, Ctrl/Cmd-click to add or remove flows. Use the selection list below to choose several without modifiers. Hover to preview; the overview stays intact. Relationships represent matching items, not physical delivery routes.</p>
+    {filters.focusedFlows.length ? <div className="sankey-focus-details" role="status">
+      <div><strong>{filters.focusedFlows.length} focused {filters.focusedFlows.length===1?'flow':'flows'}</strong><span>Matching items from any selected directed pair contribute once per order. The Sankey retains the global context.</span>
+        <div className="sankey-focus-chips">{filters.focusedFlows.map(pair=>{
+          const key=flowKey(pair.sellerState,pair.customerState);
+          return <button type="button" key={key} aria-label={`Remove focused flow ${key}`} onClick={()=>selectPair(pair.sellerState,pair.customerState,true)}>{key} ×</button>;
+        })}</div>
+      </div>
       <button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear focus</button>
     </div> : null}
     {summary.links.length === 0 ? <div className="viz-empty" role="status">No mappable seller-to-customer item flows match the selected filters, or the selected measure has no positive valid amounts.</div> : <>
       <div className="sankey-scroll" role="region" tabIndex={0} aria-label="Scrollable seller to customer Sankey diagram">
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Sankey diagram of the top fifteen seller-origin to customer-destination flows weighted by ${MEASURES[measure].toLowerCase()}; accessible flow buttons are listed below`}>
-          <title>Top 15 seller-to-customer state flows by {MEASURES[measure]}</title>
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Sankey diagram of the top 15 plus selected seller-origin to customer-destination flows weighted by ${MEASURES[measure].toLowerCase()}; accessible flow buttons are listed below`}>
+          <title>Top seller-to-customer state flows by {MEASURES[measure]} (top 15 plus focused pairs when needed)</title>
           <text className="sankey-side-heading" x={134} y={16}>SELLER ORIGINS</text>
           <text className="sankey-side-heading" x={WIDTH-132} y={16} textAnchor="end">CUSTOMER DESTINATIONS</text>
           {layout.links.map((link,i) => {
             const key = flowKey(link.sellerState,link.customerState);
-            const selected = focusKey === key;
-            const dim = emphasized !== null && emphasized !== key;
+            const selected = focusKeys.has(key);
+            const dim = emphasized !== null && !emphasized.has(key);
             const d = path(link) ?? '';
             return <path key={`${link.sellerState}-${link.customerState}-${i}`} d={d} fill="none"
               className={`sankey-ribbon${selected ? ' sankey-ribbon-active' : ''}${dim ? ' sankey-ribbon-dim' : ''}`}
               strokeWidth={Math.max(1, link.width ?? 1)}
               onMouseEnter={()=>setHoveredPair(key)} onMouseLeave={()=>setHoveredPair(null)}
-              onClick={()=>selectPair(link.sellerState,link.customerState)}>
-              <title>{stateLabel(link.sellerState)} → {stateLabel(link.customerState)}: {formatWeight(link.value,measure)}. Click to {selected?'clear focus':'focus'}.</title>
+              onClick={event=>selectPair(link.sellerState,link.customerState,event.ctrlKey||event.metaKey)}>
+              <title>{stateLabel(link.sellerState)} → {stateLabel(link.customerState)}: {formatWeight(link.value,measure)}. Click to focus; Ctrl/Cmd-click to toggle additional focus.</title>
             </path>;
           })}
           {layout.nodes.map(node => {
             const left = node.side === 'origin';
             const selectedByGlobal = left ? filters.sellerStates.includes(node.state) : filters.customerStates.includes(node.state);
-            const selectedByFocus = Boolean(filters.focusedFlow && (left ? filters.focusedFlow.sellerState : filters.focusedFlow.customerState) === node.state);
+            const selectedByFocus = filters.focusedFlows.some(pair => (left ? pair.sellerState : pair.customerState) === node.state);
             const dim = emphasized !== null && !layout.links.some(link=>
-              flowKey(link.sellerState,link.customerState)===emphasized &&
+              emphasized.has(flowKey(link.sellerState,link.customerState)) &&
               (left ? link.sellerState : link.customerState) === node.state);
             const x0 = node.x0 ?? 0, y0 = node.y0 ?? 0, x1 = node.x1 ?? 0, y1 = node.y1 ?? 0;
             const count = node.value ?? 0;
@@ -103,19 +107,19 @@ export function ShippingSankey({cohort,filters,dispatch}: {cohort:Cohort;filters
         </svg>
       </div>
       <div className="sankey-coverage" role="status"><span><span className="legend-dot"/> Displaying {formatPercentage(summary.coverage)} of {formatWeight(summary.mappableWeight,measure)} eligible, mappable {MEASURES[measure].toLowerCase()}</span>{summary.unmappableItemCount ? <span>{formatInteger(summary.unmappableItemCount)} items with unknown seller/destination state excluded from the diagram</span> : null}{measure !== 'items' && summary.invalidWeightItems ? <span>{formatInteger(summary.invalidWeightItems)} items with missing/invalid {MEASURES[measure].toLowerCase()} excluded from monetary denominator</span> : null}</div>
-      <div className="flow-action-head">Focus a seller → customer flow <span>KEYBOARD-ACCESSIBLE SELECTION</span></div>
+      <div className="flow-action-head">Add or remove focused flows <span>KEYBOARD-ACCESSIBLE MULTI-SELECTION</span></div>
       <div className="flow-action-grid" role="group" aria-label="Focus a directed seller-to-customer state pair">
         {summary.links.map((link,i) => {
           const key = flowKey(link.sellerState,link.customerState);
-          return <button type="button" key={`${link.source}-${link.target}`} aria-pressed={focusKey===key}
-            className={`flow-choice${emphasized && emphasized !== key ? ' flow-choice-dim' : ''}`}
+          return <button type="button" key={`${link.source}-${link.target}`} aria-pressed={focusKeys.has(key)}
+            className={`flow-choice${emphasized && !emphasized.has(key) ? ' flow-choice-dim' : ''}`}
             onMouseEnter={()=>setHoveredPair(key)} onMouseLeave={()=>setHoveredPair(null)} onFocus={()=>setHoveredPair(key)} onBlur={()=>setHoveredPair(null)}
-            onClick={()=>selectPair(link.sellerState,link.customerState)}>
+            onClick={()=>selectPair(link.sellerState,link.customerState,true)}>
             <span className="flow-rank">{i+1}</span><span className="flow-pair">{link.sellerState} <span aria-hidden="true">→</span> {link.customerState}</span><span>{formatWeight(link.weight,measure)}</span>
           </button>;
         })}
       </div>
     </>}
-    <p className="viz-smallprint">The overview always uses global multi-select filters, not the focused order cohort. SP → SP and other intra-state links remain distinct from source/destination nodes. Multiple items from one order contribute separately. Monetary modes use recorded valid item values, not carrier operating costs; zero-weight links do not appear.</p>
+    <p className="viz-smallprint">The overview always uses global multi-select filters, not the focused order cohort. A focused flow outside the current top 15 is pinned when its selected measure has positive weight; zero-value focused flows remain selected but cannot draw a monetary ribbon. SP → SP and other intra-state links remain distinct from source/destination nodes. Multiple items from one order contribute separately. Monetary modes use recorded valid item values, not carrier operating costs; zero-weight links do not appear.</p>
   </div>;
 }

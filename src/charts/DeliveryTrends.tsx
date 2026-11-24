@@ -12,7 +12,7 @@ const W = 860, H = 294, L = 62, R = 18, T = 22, B = 51;
 export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
   const [measure, setMeasure] = useState<TrendMeasure>('orders');
   const months = useMemo(() => monthlyTrendContext(index,filters), [index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.customerStates,filters.sellerStates,filters.categories]);
-  const focusedMonths = useMemo(() => filters.focusedFlow ? monthlyTrendContext(index,filters,30,filters.focusedFlow) : null, [index,filters]);
+  const focusedMonths = useMemo(() => filters.focusedFlows.length ? monthlyTrendContext(index,filters,30,filters.focusedFlows) : null, [index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.sellerStates,filters.customerStates,filters.categories,filters.focusedFlows]);
   const x = useMemo(() => scaleBand<string>().domain(months.map(m => m.month)).range([L, W-R]).paddingInner(.20).paddingOuter(.08), [months]);
   const maxOrders = Math.max(1,...months.map(m => m.distinctOrders));
   const y = scaleLinear().domain([0, measure === 'orders' ? maxOrders * 1.08 : 1]).nice(measure === 'orders' ? 5 : 4).range([H-B,T]);

@@ -108,3 +108,7 @@ Measure actual `orders.json` / `items.json` byte size, loading/parsing time and 
 Vite `base: '/'`; load assets using `import.meta.env.BASE_URL`. Use `npm run dev` and `npm run build` + `npm run preview`; no GitHub Pages workflow. Theme is stored in `localStorage` where available with dark first-visit fallback; styles use tokens for background, text, chart grids, selections and focus in both modes. Theme changes never change analytical results.
 
 Source Olist material and generated row-level data are locally available **but ignored by Git** even though GitHub repo is public. Record Olist CC BY-NC-SA 4.0 attribution and the chosen topology's actual source/license in `docs/DATA_PROVENANCE.md` before redistribution. Map geography is seller/customer state, not vehicle routing. Use English UI and BRL amounts, rendered via `Intl.NumberFormat`.
+
+## WU-07 post-POC contract override
+
+`Filters.focusedFlows: readonly FlowPair[]` replaces WU-05's singular `focusedFlow`. Actions: `focus_flow` (plain-click replace/toggle sole), `toggle_flow_focus` (add/remove exact pair), `clear_flow_focus` (empty list), and `restore_filters` (validated saved view). Global multi-select groups remain unchanged. Context selectors ignore focus; `selectFocusedFlowCohort(context, focusedFlows)` intersects matching item rows with the OR of directed pair constraints, then deduplicates orders. `topDirectedFlows` can append selected out-of-top-15 links to preserve visual focus across measure re-ranking. See `docs/WU07_SPEC.md`.

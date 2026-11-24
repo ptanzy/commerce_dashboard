@@ -62,3 +62,5 @@ Choose exactly one source at WU-00 and save `sourceURL`, version/commit, license
 - [Metabase](https://www.metabase.com/docs/latest/dashboards/introduction) — cross-filter and drill-through conventions.
 - [Observable Framework](https://observablehq.com/framework/) — build-time transforms for static sites.
 - [D3](https://d3js.org/) and [TanStack Table](https://tanstack.com/table/latest) — implemented interaction libraries.
+
+| ADR-07 | WU-07: `focusedFlows` is an exact directed pair set, not Cartesian origin/destination selections; local CSV and presets only | Avoids false cross-pair orders; preserves source data ownership and local-only constraints. New risk: large client-side CSV exports and browser storage failure, disclosed and handled. |

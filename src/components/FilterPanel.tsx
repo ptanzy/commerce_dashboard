@@ -64,7 +64,7 @@ function MultiFilter({ label, values, options, dimension, display, dispatch, sea
 
 export function FilterPanel({ filters, dispatch, options, matchedCount, totalCount }: Props) {
   const dateActive = filters.purchaseDateFrom !== null || filters.purchaseDateTo !== null;
-  const active = Number(dateActive) + filters.customerStates.length + filters.sellerStates.length + filters.categories.length + Number(filters.focusedFlow !== null);
+  const active = Number(dateActive) + filters.customerStates.length + filters.sellerStates.length + filters.categories.length + filters.focusedFlows.length;
   const handleDateFrom = (from: string | null) => dispatch({type: 'set_date_range', from, to: filters.purchaseDateTo && from && from > filters.purchaseDateTo ? null : filters.purchaseDateTo});
   const handleDateTo = (to: string | null) => dispatch({type: 'set_date_range', from: filters.purchaseDateFrom && to && to < filters.purchaseDateFrom ? null : filters.purchaseDateFrom, to});
 
@@ -115,7 +115,10 @@ export function FilterPanel({ filters, dispatch, options, matchedCount, totalCou
           {filters.customerStates.map(code=><SelectedChip key={`d-${code}`} label={`Destination: ${code}`} onClear={()=>dispatch({type:'toggle_value',dimension:'customerStates',value:code})}/>)}
           {filters.categories.map(category=><SelectedChip key={`c-${category}`} label={`Category: ${categoryLabel(category)}`} onClear={()=>dispatch({type:'toggle_value',dimension:'categories',value:category})}/>)}
           {dateActive && <SelectedChip label={`Date: ${filters.purchaseDateFrom ?? 'Start'} – ${filters.purchaseDateTo ?? 'End'}`} onClear={() => dispatch({type:'set_date_range',from:null,to:null})} />}
-          {filters.focusedFlow && <SelectedChip label={`Focused flow: ${filters.focusedFlow.sellerState} → ${filters.focusedFlow.customerState}`} onClear={()=>dispatch({type:'clear_flow_focus'})}/>}
+          {filters.focusedFlows.length > 0 && <SelectedChip
+            label={`${filters.focusedFlows.length} focused ${filters.focusedFlows.length === 1 ? 'flow' : 'flows'}`}
+            onClear={() => dispatch({type:'clear_flow_focus'})}
+          />}
         </>}
       </div>
       <span className="result-count" role="status" aria-live="polite">{matchedCount.toLocaleString('en-US')} <span>of {totalCount.toLocaleString('en-US')} orders</span></span>

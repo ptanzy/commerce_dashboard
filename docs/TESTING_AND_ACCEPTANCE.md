@@ -87,3 +87,7 @@ Create at least 8 synthetic test orders covering:
 - [ ] Actual commands/results, known issues and failed/not-run tests documented.
 - [ ] Local dev + build/preview work; no public hosting claim.
 - [ ] README accurately documents download/ZIP placement, ETL and runtime commands; public Git ignore restrictions still respected.
+
+## WU-07 post-POC acceptance gate
+
+In addition to previous gates: verify two exact selected Sankey directed pairs with multiple-seller orders and no accidental Cartesian cross-pair; accessible additive selection, Ctrl/Cmd click, chip removal, metric toggles, top-15 pinning; category ranking measures and low-N behavior; unknown/invalid day-delta exclusion; comparison previous period and insufficient-history messaging; CSV headers/row count and blank/null values; saved view save/load/rename/delete with browser storage unavailable; both themes and mobile layout. Full local `npm run typecheck`, `npm test`, `npm run test:node`, `npm run build`, `node tests/check_olist.cjs`, `node tests/check_explorer.cjs`, and Python suite are required before committing.

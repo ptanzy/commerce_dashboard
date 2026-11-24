@@ -85,7 +85,7 @@ export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters
   // Ignore only the displayed dimension, so users can add another state without its count disappearing.
   // A focused Sankey flow is visual emphasis, not a constraint on this context map.
   const context = useMemo(() => selectCohort(index, {
-    ...filters, focusedFlow: null,
+    ...filters, focusedFlows: [],
     ...(mode === 'origin' ? {sellerStates: []} : {customerStates: []}),
   }), [index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories, mode]);
   const stats = useMemo(() => stateDeliveryStats(context,mode), [context, mode]);
@@ -97,7 +97,7 @@ export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters
     .filter(stat => stat.onTimeRate !== null && stat.onTimeDenominator >= MIN_SAMPLE)
     .sort((a,b) => a.onTimeRate! - b.onTimeRate! || b.onTimeDenominator - a.onTimeDenominator || a.state.localeCompare(b.state)).slice(0,5), [stats]);
   const active = mode === 'origin' ? filters.sellerStates : filters.customerStates;
-  const focusedState = mode === 'origin' ? filters.focusedFlow?.sellerState : filters.focusedFlow?.customerState;
+  const focusedStates = new Set(filters.focusedFlows.map(pair=>mode==='origin'?pair.sellerState:pair.customerState));
   const rows = useMemo(() => UF_CODES.map(code => ({code, name: BRAZIL_STATES[code], stat: stats.get(code)})), [stats]);
   const metricDescription = metric === 'orders' ? 'Darker means more distinct orders.' : metric === 'onTime'
     ? 'Darker means higher on-time rate. Fewer than 30 eligible deliveries are shown neutral.'
@@ -139,14 +139,14 @@ export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters
           const value = measureValue(stat,metric);
           const bucket = value === null || (metric === 'orders' && value === 0) || (metric !== 'orders' && sample < MIN_SAMPLE)
             ? 0 : Math.min(5, Math.max(1, Math.ceil((value / (max || 1)) ** 0.58 * 5)));
-          return <path key={code} d={d} className={`brazil-region map-bucket-${bucket}${active.includes(code) ? ' map-selected' : ''}${focusedState === code ? ' map-focus' : ''}`} onClick={() => selectState(code)}>
+          return <path key={code} d={d} className={`brazil-region map-bucket-${bucket}${active.includes(code) ? ' map-selected' : ''}${focusedStates.has(code) ? ' map-focus' : ''}`} onClick={() => selectState(code)}>
             <title>{stateLabel(code)} — {formatMapValue(stat,metric)}; {formatInteger(stat?.distinctOrders ?? 0)} distinct orders; {metric === 'onTime' ? `${sample} punctuality-eligible deliveries` : metric === 'median' ? `${sample} valid durations` : 'matching seller/customer state'}${lowSample ? ' (small sample — neutral fill)' : ''}{active.includes(code) ? ' (selected; click to remove)' : ' (click to add to selection)'}</title>
           </path>;
         })}
       </svg><div className="map-legend"><span>{metric==='orders'?'No matching orders':'Unavailable / fewer than 30'}</span><span className="map-swatches">{[0,1,2,3,4,5].map(i => <i key={i} className={`map-bucket-${i}`} aria-hidden="true" />)}</span><span>{metric==='onTime'?'Higher rate':metric==='median'?'Longer time':'Higher count'}</span></div></div>
       <div className="state-list-panel"><div className="state-list-title">{modeLabel} <span>SELECT A STATE</span></div>
         <div className="state-list" role="group" aria-label={`${modeLabel} state selection`}>
-          {rows.map(({code,name,stat}) => <button type="button" className={`state-option${active.includes(code) ? ' state-option-active' : ''}${focusedState === code ? ' state-option-focused' : ''}`} aria-pressed={active.includes(code)} key={code} onClick={() => selectState(code)} title={`${name}: ${formatMapValue(stat,metric)}; ${formatInteger(stat?.onTimeDenominator ?? 0)} punctuality-eligible`}>
+          {rows.map(({code,name,stat}) => <button type="button" className={`state-option${active.includes(code) ? ' state-option-active' : ''}${focusedStates.has(code) ? ' state-option-focused' : ''}`} aria-pressed={active.includes(code)} key={code} onClick={() => selectState(code)} title={`${name}: ${formatMapValue(stat,metric)}; ${formatInteger(stat?.onTimeDenominator ?? 0)} punctuality-eligible`}>
             <span><strong>{code}</strong> {name}</span><span className="state-measure-value">{formatMapValue(stat,metric)}{metric !== 'orders' ? <small>n={metric === 'onTime' ? (stat?.onTimeDenominator ?? 0) : (stat?.durationCount ?? 0)}{(metric === 'onTime' ? (stat?.onTimeDenominator ?? 0) : (stat?.durationCount ?? 0)) < MIN_SAMPLE ? ' · low N' : ''}</small> : null}</span>
           </button>)}
         </div>
