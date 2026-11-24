@@ -1,7 +1,7 @@
 import { useMemo, useReducer } from 'react';
 import type { Dispatch } from 'react';
 import {
-  ArrowUpRight, BarChart3, CircleAlert, Database,
+  ArrowDownRight, ArrowUpRight, BarChart3, CircleAlert, Database,
   GitBranch, Globe2, Layers3, MapPinned, Moon, RefreshCcw, Sun, Truck,
 } from 'lucide-react';
 import { filterReducer } from './filterReducer';
@@ -19,6 +19,7 @@ import { KpiCards, KpiSkeletons } from '../components/KpiCards';
 import { BrazilMap } from '../charts/BrazilMap';
 import { DeliveryTrends } from '../charts/DeliveryTrends';
 import { ShippingSankey } from '../charts/ShippingSankey';
+import { OrderExplorer } from '../features/orders/OrderExplorer';
 
 function Header({theme, onToggle}: {theme: DashboardTheme;onToggle:()=>void}) {
   return <header className="topbar">
@@ -67,7 +68,7 @@ function ChartsSection({dataset, cohort, filters, dispatch}: {dataset: Dashboard
   return <section className="upcoming-section" aria-labelledby="patterns-heading">
     <div className="section-headline">
       <div><div className="section-eyebrow">02 / EXPLORE THE PATTERNS</div><h2 id="patterns-heading" className="content-heading">Beyond the numbers</h2></div>
-      <span className="workunit-label">Interactive geography · Monthly trends · State-to-state flows</span>
+      <div className="charts-heading-actions"><span className="workunit-label">Interactive geography · Monthly trends · State-to-state flows</span><a className="explore-orders-link" href="#order-explorer">View matching orders <ArrowDownRight size={15} aria-hidden="true" /></a></div>
     </div>
     <div className="chart-grid">
       <section className="viz-card" aria-labelledby="map-heading">
@@ -105,6 +106,7 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
     {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
     <KpiCards metrics={metrics} />
     <ChartsSection dataset={dataset} cohort={cohort} filters={filters} dispatch={dispatch} />
+    <OrderExplorer index={dataset.index} cohort={cohort} filters={filters} />
     <DataFootnote dataset={dataset} />
   </>;
 }

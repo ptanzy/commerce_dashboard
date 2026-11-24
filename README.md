@@ -1,6 +1,6 @@
 # Commerce Delivery Intelligence — Local Dashboard POC
 
-A **local-only** historical Olist e-commerce delivery dashboard in development, demonstrating React, TypeScript, D3 and analytically correct cross-filtering. WU-00 and WU-01 are implemented and checked on the developer machine. WU-02 adds a React shell and real-data KPI/filter UI; **D3 charts and the order explorer remain separate upcoming units.**
+A **local-only** historical Olist e-commerce delivery dashboard in development, demonstrating React, TypeScript, D3 and analytically correct cross-filtering. WU-00 through WU-03 are implemented and committed on the feature branch; **WU-04 adds the searchable order explorer and order details**. Release acceptance remains pending successful local tests and a human browser walkthrough.
 
 ## Locked decisions
 
@@ -32,13 +32,13 @@ The six required CSVs are listed in `docs/DATA_SPECIFICATION.md`. The source geo
 | `docs/IMPLEMENTATION_PLAN.md` | Two-day aspiration and five WU sequence |
 | `docs/DECISIONS_AND_RISKS.md` | Accepted decisions and remaining source risks |
 
-WU-00 reports: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. Work-unit handoffs: `docs/WU01_HANDOFF.md`, `docs/WU02_HANDOFF.md`, and `docs/WU03_HANDOFF.md`. WU-02 implementation handoff: `docs/WU02_HANDOFF.md`.
+WU-00 reports: `docs/DATA_PROFILE.md` and `docs/DATA_PROVENANCE.md`. Work-unit handoffs: `docs/WU01_HANDOFF.md` through `docs/WU04_HANDOFF.md`.
 
 ## Starting development
 
 Read every document first. Request an **inspection-only readiness review** or explicitly authorize a **single WU**. The project currently has five gated WUs: source verification (00), ETL/metrics (01), React shell/KPIs (02), D3 visuals (03), order explorer/QA (04). Authorization for planning or docs updates **does not** authorize application implementation.
 
-WU-01 data commands and WU-02 React commands appear below, with actual executed checks distinguished from pending local acceptance in the corresponding handoffs.
+Implementation and local testing commands are below. Only tests actually run are marked passed in the corresponding work-unit handoffs.
 
 ## Recommended .gitignore entries (verify before WU-01)
 
@@ -137,13 +137,11 @@ contrast, keyboard tab navigation, reset/clear chips, and a no-results filter
 combination. `docs/WU02_HANDOFF.md` records actual execution evidence and
 remaining local acceptance checks.
 
-**Lockfile:** WU-02 introduces new dependencies. Run `npm install` on the local
-development machine and commit the resulting updated `package-lock.json` with
-WU-02. Do not commit `node_modules`, `dist`, or `public/data`.
+**Lockfile:** Commit the locally generated `package-lock.json` whenever dependencies change. Do not commit `node_modules`, `dist`, or `public/data`.
 
 ## WU-03 — linked D3 geographic and delivery visualizations
 
-WU-03 replaces the three visualization placeholders with interactive state geography, monthly trend context and a top-15 seller-to-customer Sankey diagram. It **does not** implement the WU-04 order explorer. All charts reuse the WU-01 analytical selectors and the WU-02 `useReducer` filters.
+WU-03 replaces the three visualization placeholders with interactive state geography, monthly trend context and a top-15 seller-to-customer Sankey diagram. The order explorer is added by WU-04. All charts reuse the WU-01 analytical selectors and the WU-02 `useReducer` filters.
 
 After merging the WU-03 update into the existing repository (do not replace the repository directory or delete local `public/data/`), install the new D3/TopoJSON dependencies, update the lockfile, and validate:
 
@@ -165,3 +163,43 @@ Open `http://127.0.0.1:5173/` in a browser, and test both light/dark modes and d
 **Sankey:** shows the top 15 `sellerState → customerState` pairs by **matching item contribution count**, not order count or physical shipment tracking. `origin:SP` and `dest:SP` are separate nodes, so same-state SP→SP flows remain. Keyboard-accessible flow buttons set both state filters atomically. The coverage percentage uses the number of mappable item records; unmappable records are disclosed separately.
 
 WU-03 code-generation validation and remaining acceptance checks are recorded in `docs/WU03_HANDOFF.md`. **Do not assume that source compilation, browser layout or screenshots have been verified until the local tests have run.**
+
+
+## WU-04 — order explorer and final local acceptance
+
+This unit adds a client-side, one-row-per-eligible-order explorer using TanStack Table v8.
+Search is case-insensitive over order IDs. Click the column headings to sort the **entire filtered set**; the table paginates at 25 rows. The browser renders only the current 25 rows, not all ~100k orders. The table updates from the same filters applied by the map, trends, and Sankey. The **View matching orders** link after the charts jumps to this section.
+
+The explorer's **Matching item price** and **Matching freight** columns include only items satisfying the active seller/category filters. The order-detail drawer shows all original items (and clearly separated *full-order* sums), with matched items highlighted. Orders with no item rows have item count 0 and `—` monetary amounts; a valid zero monetary value renders as BRL 0.00. The drawer closes with Escape, restores focus and offers a close button.
+
+### Installation and tests (PowerShell)
+
+Run from the repo root on `feature/dashboard-poc` after extracting WU-04 over the existing files:
+
+```powershell
+npm install
+python -m unittest discover -s tests -p "test_*.py" -v
+npm run typecheck
+npm test
+npm run test:node
+npm run build
+node tests/check_olist.cjs
+node tests/check_explorer.cjs
+npm run preview
+```
+
+`npm install` adds `@tanstack/react-table@^8.21.3` and refreshes `package-lock.json`; this version is intentionally pinned to the established v8 API instead of upgrading to breaking v9 during the POC. `npm run preview` opens the built app (the terminal displays the URL). For live development use `npm run dev` at `http://127.0.0.1:5173/`. The source ZIP and generated records stay in Git-ignored locations; the licensed 27-state TopoJSON is committed with its MIT notice.
+
+### Required manual P0 walkthrough
+
+1. Load real-data KPIs and map. Confirm initial dark theme, origin map, unbounded date range and 27 states. Switch to light and reload.
+2. Click SP seller origin, switch to customer destination and click RJ: verify both chips remain and table totals and row count change. Remove chips separately.
+3. Set a category: table sums must include only matching items while the order details separately list full-order sums.
+4. Click a trend month and another month: table and KPIs change; chart still shows the full historical axis.
+5. Click a Sankey flow: both geographic filter chips and the matching order table update.
+6. Search an exact order ID, sort purchase/duration/price, go forward/backward through 25-row pages; open drawer, inspect original item rows, close with Escape, and check keyboard focus restoration.
+7. Verify a zero-item order (if located through exact ID from `orders.json`) shows `0` items and `—` in money columns. Apply a no-match filter: empty table without phantom orders or `NaN`.
+8. Test at desktop ~1440px and mobile ~390px, including scrolling the wide table, drawer controls, both themes, focus indicators and the map/Sankey keyboard selection lists.
+9. Record actual browser load/filter latency and file sizes before claiming the 500ms interactive response target has been met.
+
+All WU-04 test results, limitations, and acceptance items must be recorded in `docs/WU04_HANDOFF.md`. **Do not consider the POC release accepted until the above manual checks and automated tests actually pass on the developer's machine.**
