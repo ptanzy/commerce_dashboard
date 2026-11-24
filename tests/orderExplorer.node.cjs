@@ -14,7 +14,7 @@ const items = [
   {orderId:'multi',orderItemId:2,sellerId:'s2',sellerState:'RJ',customerState:'MG',category:'health_beauty',priceBRL:200,freightChargeBRL:40},
 ];
 const index=buildDataIndex([makeOrder('multi',2),makeOrder('zero',0)],items);
-const unfiltered={purchaseDateFrom:null,purchaseDateTo:null,customerState:null,sellerState:null,category:null};
+const unfiltered={purchaseDateFrom:null,purchaseDateTo:null,customerStates:[],sellerStates:[],categories:[],focusedFlow:null};
 
 test('WU-04 explorer preserves zero-item orders with unavailable money',()=>{
   const rows=selectExplorerOrders(selectCohort(index,unfiltered));
@@ -25,7 +25,7 @@ test('WU-04 explorer preserves zero-item orders with unavailable money',()=>{
   assert.equal(zero.matchingFreightBRL,null);
 });
 test('WU-04 item filters produce distinct one-row orders with only matching-item money',()=>{
-  const filters={...unfiltered,sellerState:'RJ',category:'health_beauty'};
+  const filters={...unfiltered,sellerStates:['RJ'],categories:['health_beauty']};
   const cohort=selectCohort(index,filters);
   assert.deepEqual(selectExplorerOrders(cohort).map(o=>[o.orderId,o.matchingPriceBRL,o.matchingFreightBRL]),[['multi',200,40]]);
   const details=selectOrderDetail(index,cohort,filters,'multi');
@@ -37,7 +37,7 @@ test('WU-04 item filters produce distinct one-row orders with only matching-item
   assert.deepEqual([...details.matchingItemIds],[2]);
 });
 test('WU-04 returns no detail when order is excluded by current filters',()=>{
-  const filters={...unfiltered,sellerState:'SP',category:'health_beauty'};
+  const filters={...unfiltered,sellerStates:['SP'],categories:['health_beauty']};
   const cohort=selectCohort(index,filters);
   assert.equal(selectOrderDetail(index,cohort,filters,'multi'),null);
 });

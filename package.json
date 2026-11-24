@@ -2,7 +2,7 @@
   "name": "commerce-dashboard",
   "private": true,
   "version": "0.4.0",
-  "description": "Local Olist delivery intelligence dashboard — WU-04 order explorer and integration",
+  "description": "Local Olist delivery intelligence dashboard \u2014 WU-05 multi-select and contextual flow focus",
   "type": "commonjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs tests/orderExplorer.node.cjs"
+    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs tests/orderExplorer.node.cjs tests/wu05.node.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

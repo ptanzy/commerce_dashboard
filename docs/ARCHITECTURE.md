@@ -67,26 +67,31 @@ commerce_dashboard/
 
 **Single source of truth:** types, cohort rules, metrics and selectors belong in `src/domain/`. `src/data/` loads, validates and indexes data but **does not recompute business formulas**. `src/app/` owns interactions; `src/charts/` receives typed view models and emits actions.
 
-## Canonical filter state
+## Canonical filter and focused-flow state (WU-05)
+
+The earlier single-select state contract has been **superseded** by WU-05. The checked-in 
+`src/domain/types.ts` and `src/app/filterReducer.ts` are normative:
 
 ```ts
+interface FlowPair { sellerState: string; customerState: string }
 interface Filters {
-  purchaseDateFrom: string | null;  // inclusive YYYY-MM-DD, null = unbounded
-  purchaseDateTo: string | null;
-  customerState: string | null;     // destination UF
-  sellerState: string | null;       // origin UF
-  category: string | null;          // stable source-derived category key
+  purchaseDateFrom: string | null; purchaseDateTo: string | null;
+  customerStates: readonly string[]; // [] = all, OR within group
+  sellerStates: readonly string[];   // [] = all, OR within group
+  categories: readonly string[];    // [] = all, OR within group
+  focusedFlow: FlowPair | null;     // context-preserving drill-down, not a dimension selection
 }
+type MultiDimension = 'customerStates' | 'sellerStates' | 'categories';
 type FilterAction =
-  | { type: 'set_date_range'; from: string | null; to: string | null }
-  | { type: 'set_customer_state'; state: string | null }
-  | { type: 'set_seller_state'; state: string | null }
-  | { type: 'set_category'; category: string | null }
-  | { type: 'set_flow_pair'; sellerState: string; customerState: string }
-  | { type: 'clear_all' };
+  | {type:'set_date_range'; from:string|null; to:string|null}
+  | {type:'toggle_value'; dimension:MultiDimension; value:string}
+  | {type:'clear_dimension'; dimension:MultiDimension}
+  | {type:'focus_flow'; sellerState:string; customerState:string}
+  | {type:'clear_flow_focus'}
+  | {type:'clear_all'};
 ```
 
-There is **no separate `selectedSankeyLink`** in the canonical state: the selected pair is represented by `sellerState` + `customerState`. A link click sets both atomically using `set_flow_pair`; independent filter chips allow either dimension to be cleared. The map's origin/destination display toggle and metric selector are **view-only UI state** and do not silently erase active filters.
+Group membership is **OR within each group, AND across dimensions**, with seller and category evaluated **on the same item**. A focus adds an exact directed source–destination item-pair constraint to metrics and order explorer *without* changing the broader context filters or the Sankey layout. If global seller/customer selections no longer include the focus, the reducer clears it. The 27-state map uses a **self-dimension-excluded context** to keep other states visible and addable. The trend retains the historical X-axis and shows a focused overlay when applicable. See `docs/WU05_SPEC.md`.
 
 ## Selector/data ownership
 

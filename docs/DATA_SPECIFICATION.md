@@ -83,22 +83,20 @@ interface DataManifest {
 
 `public/geo/brazil-states.topojson` is a separate state-boundary asset. **No `geo-flows.json` or `locations.json` is required for P0.** Source-derived records and metadata may remain only in local ignored `public/data/`. Add `/public/data/` to the repository `.gitignore` before generating outputs; `data/raw/` and `data/processed/` should also be ignored. If P0 asset size/latency is problematic, benchmark and document before changing these contracts.
 
-## 3. Canonical filters and data cohorts
+## 3. Canonical filters and data cohorts — superseded by WU-05
 
-`Filters` and actions are defined once in `ARCHITECTURE.md`. Purchase dates are inclusive; an unset range includes **all records with valid purchase dates**. Dates are parsed as source calendar values rather than viewer timezone conversions. All active dimension filters combine with AND.
+`Filters` now uses **arrays** `sellerStates`, `customerStates`, `categories`, with empty arrays meaning *no restriction*. Within any group, selected codes combine with **OR**; across groups they combine with **AND**. Seller and category restrictions apply to the **same item contribution**. `focusedFlow` is a separate directed pair constraint for a drill-down, **not** a replacement for the global dimensions. Dates remain one inclusive interval of source calendar dates.
 
-1. `baseOrders`: purchase-date-eligible orders, plus selected customer-state constraint.
-2. `matchedItems`: items whose `orderId` belongs to `baseOrders`, and that satisfy **both** active seller-state and category filters, if set.
-3. `eligibleOrderIds`: if seller or category filter is active, distinct IDs from `matchedItems`; otherwise every ID from `baseOrders`, including orders with zero item rows.
-4. `eligibleOrders`: one order record for each eligible ID; **all order-based KPIs** and order table rows derive from this set, once per ID.
-5. `eligibleItems`: `matchedItems` restricted to eligibleOrderIds; **item-level** metrics and Sankey use these rows, never all items of eligible orders when a seller/category filter is active.
-6. **Map origin mode:** for each seller state, distinct order IDs represented by `eligibleItems` originating there. An order with items from two seller states may contribute to both state buckets but only once to overall orders. For origin performance metrics, calculate delivered eligible orders **having at least one matched item in that state**, deduplicated per state. **Map destination mode:** distinct eligible orders grouped by customerState.
-7. **Order explorer:** distinct eligible orders; item price/freight columns are sums over `eligibleItems` linked to that order and labeled **Matching items: price / freight**. Full-order items and full-order totals can be displayed separately in details, clearly distinguished.
-8. **Sankey link:** seller-state -> customer-state item-level contributions. A link click applies `set_flow_pair` atomically. Never model it as actual delivery route.
+1. `contextCohort=selectCohort(index,filters)`: valid date and selected customer states select base orders; matching items must satisfy both seller-state group and category group; if either item group is constrained, eligible orders are distinct IDs represented by matching items; without item group constraints, zero-item orders are retained.
+2. `focusedCohort=selectFocusedFlowCohort(contextCohort,filters.focusedFlow)`: when focused, retain only matching item rows where **both** `item.sellerState` and `item.customerState` equal the focused pair, then deduplicate their order IDs. When focus is null, use the context as-is.
+3. KPIs, the order explorer and matching-item financial sums use `focusedCohort`. The order detail drawer still shows every original item, with matching items identified by the current global groups **and** focused pair; full-order values are labeled separately.
+4. Sankey uses **contextCohort** and its top 15 item-contribution links regardless of focus. Hover previews a ribbon; click toggles focus while retaining all other links. Focused unrelated ribbons are dimmed, not removed. Clicking another link switches focus.
+5. Map state counts use a **context without the map's currently displayed state dimension** to allow adding other origins/destinations (retain dates, category and the other state group). Highlight selected states and the focused pair's applicable state. Countrywide distinct orders are never calculated by summing overlapping origin-state counts.
+6. Monthly trend uses the full historical month domain, ignores the date constraint for temporal context, retains global non-date filters and shows focused-month overlay when a flow is selected. Tooltip/legend must distinguish context from focus.
+7. Individual selection chips remove only one value. Clearing a dimension empties that group. Focus can be cleared separately. An incompatible origin/destination group change clears focus automatically.
+8. Zero-item orders are eligible when no seller/category item group is constrained and no flow is focused; they contribute nothing to item-based metrics. Display unavailable amounts as `—`, not an invented BRL zero.
 
-**Subtlety:** if no item filter is applied, an order with zero items may appear in the order table and order KPIs but contributes nothing to item freight/Sankey/origin map. In order table show `—` for item price/freight when no item records, **not** an invented BRL 0. Use `0` item count when known. A subset of orders with zero items is therefore valid even if no origin state can be determined.
-
-**Example:** One order with electronics items from SP and furniture from RJ, customer MG. Filter electronics → one order, only SP matching items/charges, one Sankey SP→MG link. Filter furniture → same one order, only RJ matching items/charges. Filter none → one KPI order but both link contributions.
+**Example:** An order contains SP/electronics and RJ/furniture items delivered to MG. Selecting sellers SP+RJ and categories electronics+furniture retains two matched items and one order. Focusing SP→MG keeps only the SP item in matching freight/value and still counts the order once. The Sankey continues to display all global-context flows, including RJ→MG.
 
 ## 4. Metric definitions
 

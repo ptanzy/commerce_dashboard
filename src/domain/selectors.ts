@@ -1,5 +1,5 @@
 import type { DataIndex } from '../data/indexes';
-import type { Filters, ItemFact, OrderFact } from './types';
+import type { Filters, FlowPair, ItemFact, OrderFact } from './types';
 
 export interface Cohort {
   eligibleOrders: readonly OrderFact[];
@@ -14,14 +14,14 @@ export function selectCohort(index: DataIndex, filters: Filters): Cohort {
     return date !== null &&
       (filters.purchaseDateFrom === null || date >= filters.purchaseDateFrom) &&
       (filters.purchaseDateTo === null || date <= filters.purchaseDateTo) &&
-      (filters.customerState === null || order.customerState === filters.customerState);
+      (filters.customerStates.length === 0 || (order.customerState !== null && filters.customerStates.includes(order.customerState)));
   });
   const baseIds = new Set(baseOrders.map((o) => o.orderId));
   const eligibleItems = index.items.filter((item) =>
     baseIds.has(item.orderId) &&
-    (filters.sellerState === null || item.sellerState === filters.sellerState) &&
-    (filters.category === null || item.category === filters.category));
-  const itemFilter = filters.sellerState !== null || filters.category !== null;
+    (filters.sellerStates.length === 0 || (item.sellerState !== null && filters.sellerStates.includes(item.sellerState))) &&
+    (filters.categories.length === 0 || filters.categories.includes(item.category)));
+  const itemFilter = filters.sellerStates.length > 0 || filters.categories.length > 0;
   const eligibleOrderIds = itemFilter
     ? new Set(eligibleItems.map((item) => item.orderId))
     : baseIds;
@@ -29,6 +29,18 @@ export function selectCohort(index: DataIndex, filters: Filters): Cohort {
     ? baseOrders.filter((o) => eligibleOrderIds.has(o.orderId))
     : baseOrders;
   return { eligibleOrders, eligibleItems, eligibleOrderIds };
+}
+
+/** Drill-down only: preserve the broader global cohort in charts that need context. */
+export function selectFocusedFlowCohort(context: Cohort, focus: FlowPair | null): Cohort {
+  if (!focus) return context;
+  const eligibleItems = context.eligibleItems.filter(item =>
+    item.sellerState === focus.sellerState && item.customerState === focus.customerState);
+  const eligibleOrderIds = new Set(eligibleItems.map(item => item.orderId));
+  return {
+    eligibleOrders: context.eligibleOrders.filter(order => eligibleOrderIds.has(order.orderId)),
+    eligibleItems, eligibleOrderIds,
+  };
 }
 
 export interface Metrics {
@@ -197,11 +209,11 @@ export function monthDateRange(month: string): {from: string; to: string} {
   return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
 }
 
-export function monthlyTrendContext(index: DataIndex, filters: Filters, lowSampleThreshold = 30): readonly MonthMetric[] {
+export function monthlyTrendContext(index: DataIndex, filters: Filters, lowSampleThreshold = 30, focus: FlowPair | null = null): readonly MonthMetric[] {
   if (!index.fullHistoryMin || !index.fullHistoryMax) return [];
   // Remove only the date constraint; keep all current seller/customer/category constraints.
   const contextFilters = { ...filters, purchaseDateFrom: null, purchaseDateTo: null };
-  const cohort = selectCohort(index, contextFilters);
+  const cohort = selectFocusedFlowCohort(selectCohort(index, contextFilters), focus);
   const byMonth = new Map<string, {orders: number; onTime: number; eligible: number}>();
   for (const order of cohort.eligibleOrders) {
     const month = order.purchaseDate!.slice(0, 7);

@@ -203,3 +203,26 @@ npm run preview
 9. Record actual browser load/filter latency and file sizes before claiming the 500ms interactive response target has been met.
 
 All WU-04 test results, limitations, and acceptance items must be recorded in `docs/WU04_HANDOFF.md`. **Do not consider the POC release accepted until the above manual checks and automated tests actually pass on the developer's machine.**
+
+## WU-05 — multi-select filters and contextual Sankey focus
+
+**Post-POC enhancement:** Global seller origins, customer destinations, and product categories support multiple selections. Use checkboxes to select several states/categories, search categories by name, or remove individual chips. Empty groups mean all values; within-group matching uses OR and across-group matching uses AND. Seller and category filters must match the **same item**. Purchase dates remain a single inclusive range.
+
+Sankey ribbon **hover previews** a flow; clicking it **focuses** that directed source → destination pair. Other ribbons remain visible but dimmed. Focus narrows KPIs and the order explorer without altering the global group selections; clicking the selected ribbon again or removing the Focused flow chip restores broad results. The trend retains full historical context and adds focused bars; the map keeps unselected states available to add. Focused amounts in the order drawer reflect matching items, with full-order totals separately labeled.
+
+No new datasets, services or package dependencies are required. For authoritative details and acceptance, see [`docs/WU05_SPEC.md`](docs/WU05_SPEC.md) and [`docs/WU05_HANDOFF.md`](docs/WU05_HANDOFF.md).
+
+From the repository root after merging the WU-05 files:
+
+```powershell
+npm install
+npm run typecheck
+npm test
+npm run test:node
+npm run build
+node tests/check_olist.cjs
+node tests/check_explorer.cjs
+npm run dev
+```
+
+Test both dark/light themes, desktop/mobile layouts, the multi-selection checklists, the focused Sankey drill-down, and the order explorer before committing WU-05. Original and generated Olist records remain Git-ignored.

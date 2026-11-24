@@ -1,6 +1,6 @@
 # WORK_UNITS.md — canonical AI agent instructions, version 2
 
-**Project:** `ptanzy/commerce_dashboard` · local two-day React+D3 Olist POC · **WU-00 through WU-04**
+**Project:** `ptanzy/commerce_dashboard` · original POC **WU-00 through WU-04**; post-POC enhancement **WU-05** as separately authorized.
 
 ## Required operating rules for ChatGPT, Copilot, Codex and other agents
 
@@ -8,7 +8,7 @@
 
 Implement **only** the WU the owner explicitly authorizes; stop after its test and handoff gate. The owner can authorize multiple WUs but each gate still applies. Protect preexisting user changes; never reset, force push, delete untracked files or edit unrelated files. Work on a user-approved feature branch, never push to `master` without permission. Do not install dependencies, create/modify files, run commands or publish data in inspection-only mode. Report failures, incomplete work and checks not run accurately. Don't claim that tests or human visual acceptance passed unless actually executed and observed.
 
-When specs conflict, follow this order: current explicit owner instructions → `DATA_SPECIFICATION.md` (metric/filter grain) → `TESTING_AND_ACCEPTANCE.md` (gates) → `PRODUCT_AND_FEATURES.md` (P0/P1) → `ARCHITECTURE.md` (folder/state ownership) → `VISUALIZATION_AND_UX.md` (appearance/interactions) → `IMPLEMENTATION_PLAN.md` (schedule) → this file (execution mechanics). **Do not independently rewrite foundational contracts**; escalate material conflicts.
+For WU-05, the explicit replacement contracts in `docs/WU05_SPEC.md` override older single-value filter and `set_flow_pair` rules. Otherwise, when specs conflict, follow this order: current explicit owner instructions → `DATA_SPECIFICATION.md` (metric/filter grain) → `TESTING_AND_ACCEPTANCE.md` (gates) → `PRODUCT_AND_FEATURES.md` (P0/P1) → `ARCHITECTURE.md` (folder/state ownership) → `VISUALIZATION_AND_UX.md` (appearance/interactions) → `IMPLEMENTATION_PLAN.md` (schedule) → this file (execution mechanics). **Do not independently rewrite foundational contracts**; escalate material conflicts.
 
 ## Approved scope and stack
 
@@ -88,6 +88,18 @@ When specs conflict, follow this order: current explicit owner instructions → 
 4. Run all available TS typecheck, Vitest, Python checks, production build and Vite preview; README includes accurate local commands and license disclaimer. No public deploy.
 
 **Tests/gate:** All P0 checks passed or remaining defects explicitly listed, documented and not claimed complete. Report genuine browser inspection results, not only theoretical correctness.
+
+### WU-05 — Multi-select filters and context-preserving directed flow drill-down
+
+**Prerequisite:** WU-04 complete, owner authorizes WU-05. Do not start WU-06/07.
+
+1. Replace single-value origin/destination/category filters with array-valued groups, searchable category checklist and removable chips. Preserve same-item seller+category matching, distinct-order grain, BRL sums, single date interval and zero-item default behavior.
+2. Implement independent `focusedFlow` selection: Sankey displays the global context regardless of focus; hover preview and persistent click emphasis leave other ribbons dimmed but present; clicking selected ribbon again clears focus. Focused KPIs, order explorer, and monthly overlay are derived from the exact directed item pair intersected with global selections.
+3. Map state click toggles one group member without replacing others; map counts preserve the displayed dimension's wider context to support adding states. A flow focus conflicting with a changed seller/customer group clears automatically.
+4. Update domain/Node and React/RTL tests for multi-select OR/AND, same-item grain, focus/clear, context persistence, empty cohort, theme/date/no-items, and order detail matched-vs-full amounts. Test both themes and desktop/mobile layouts manually.
+5. Preserve no runtime backend, no new data fields, no raw Olist redistribution, and no new analytics measure toggle (deferred to WU-06).
+
+**Gate:** WU-05 local `npm run typecheck`, `npm test`, `npm run test:node`, `npm run build`, browser interaction/keyboard acceptance, plus unchanged full Olist reconciliation. Record executed commands and failures honestly. Read `docs/WU05_SPEC.md` before editing.
 
 ## Final report format (mandatory for every WU)
 

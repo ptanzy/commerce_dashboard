@@ -50,8 +50,9 @@ export function selectOrderDetail(index: DataIndex, cohort: Cohort, filters: Fil
   if (!order) return null;
   const fullItems = index.itemsByOrderId.get(orderId) ?? [];
   const matchedItems = fullItems.filter((item) =>
-    (filters.sellerState === null || item.sellerState === filters.sellerState) &&
-    (filters.category === null || item.category === filters.category),
+    (filters.sellerStates.length === 0 || (item.sellerState !== null && filters.sellerStates.includes(item.sellerState))) &&
+    (filters.categories.length === 0 || filters.categories.includes(item.category)) &&
+    (filters.focusedFlow === null || (item.sellerState === filters.focusedFlow.sellerState && item.customerState === filters.focusedFlow.customerState)),
   );
   return {
     order, fullItems,

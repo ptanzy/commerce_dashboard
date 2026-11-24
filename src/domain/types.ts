@@ -41,22 +41,28 @@ export interface DataManifest {
   sourceArchiveSha256?: string | null;
   sourceFileSha256?: Record<string, string>;
 }
+/** Empty selections mean no constraint; OR within each dimension, AND across dimensions. */
+export interface FlowPair { sellerState: string; customerState: string }
 export interface Filters {
   purchaseDateFrom: string | null;
   purchaseDateTo: string | null;
-  customerState: string | null;
-  sellerState: string | null;
-  category: string | null;
+  customerStates: readonly string[];
+  sellerStates: readonly string[];
+  categories: readonly string[];
+  /** Context-preserving detail focus. Never applied to the Sankey overview cohort. */
+  focusedFlow: FlowPair | null;
 }
+export type MultiDimension = 'customerStates' | 'sellerStates' | 'categories';
 export type FilterAction =
   | { type: 'set_date_range'; from: string | null; to: string | null }
-  | { type: 'set_customer_state'; state: string | null }
-  | { type: 'set_seller_state'; state: string | null }
-  | { type: 'set_category'; category: string | null }
-  | { type: 'set_flow_pair'; sellerState: string; customerState: string }
+  | { type: 'toggle_value'; dimension: MultiDimension; value: string }
+  | { type: 'clear_dimension'; dimension: MultiDimension }
+  | { type: 'focus_flow'; sellerState: string; customerState: string }
+  | { type: 'clear_flow_focus' }
   | { type: 'clear_all' };
 
 export const DEFAULT_FILTERS: Readonly<Filters> = Object.freeze({
-  purchaseDateFrom: null, purchaseDateTo: null, customerState: null,
-  sellerState: null, category: null,
+  purchaseDateFrom: null, purchaseDateTo: null,
+  customerStates: Object.freeze([] as string[]), sellerStates: Object.freeze([] as string[]),
+  categories: Object.freeze([] as string[]), focusedFlow: null,
 });

@@ -12,7 +12,8 @@
   "include": [
     "src/domain/**/*.ts",
     "src/data/indexes.ts",
-    "src/data/validate.ts"
+    "src/data/validate.ts",
+    "src/app/filterReducer.ts"
   ],
   "exclude": [
     "node_modules",

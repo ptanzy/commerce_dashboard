@@ -22,13 +22,13 @@ it('preserves item grain, distinct orders and zero-item order',()=>{
  expect(matchingOrderAmounts(all).get('empty')).toEqual({matchedItemCount:0,priceBRL:null,freightChargeBRL:null});
 });
 it('requires seller and category to match the same item',()=>{
- const group=selectCohort(fixture(),{...DEFAULT_FILTERS,sellerState:'SP',category:'furniture'});
+ const group=selectCohort(fixture(),{...DEFAULT_FILTERS,sellerStates:['SP'],categories:['furniture']});
  expect(group.eligibleOrders).toHaveLength(0);
- const selected=selectCohort(fixture(),{...DEFAULT_FILTERS,sellerState:'SP',category:'electronics'});
+ const selected=selectCohort(fixture(),{...DEFAULT_FILTERS,sellerStates:['SP'],categories:['electronics']});
  expect(selected.eligibleOrders).toHaveLength(4);expect(selected.eligibleItems).toHaveLength(4);
 });
 it('uses matching items for freight and order detail amounts',()=>{
- const selected=selectCohort(fixture(),{...DEFAULT_FILTERS,category:'furniture'});
+ const selected=selectCohort(fixture(),{...DEFAULT_FILTERS,categories:['furniture']});
  const kpi=computeMetrics(selected);
  expect(kpi.distinctOrders).toBe(1);expect(kpi.itemPriceBRL).toBe(200);expect(kpi.freightChargeBRL).toBe(20);
  expect(matchingOrderAmounts(selected).get('multi')!.matchedItemCount).toBe(1);
@@ -45,7 +45,7 @@ it('retains same-state SP to SP link and does not merge origin/dest nodes',()=>{
  expect(originStateOrderCounts(selectCohort(fixture(),DEFAULT_FILTERS)).get('SP')).toBe(4);
 });
 it('returns null for undefined ratios and R-7 percentiles',()=>{
- const selected=selectCohort(fixture(),{...DEFAULT_FILTERS,customerState:'XX'});
+ const selected=selectCohort(fixture(),{...DEFAULT_FILTERS,customerStates:['XX']});
  expect(computeMetrics(selected).freightToPriceRatio).toBeNull();
  expect(quantileR7([1,2,3,4],0.5)).toBe(2.5);expect(quantileR7([1,2,3,4],0.95)).toBeCloseTo(3.85);
 });

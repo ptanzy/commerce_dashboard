@@ -1,5 +1,8 @@
 # Product and Feature Requirements — POC v2
 
+> WU-05 adds post-POC multi-select dimensions and context-preserving Sankey focus. Its interactive behavior is specified in `docs/WU05_SPEC.md` and supersedes the original P0 single-select/click-to-filter wording below; the baseline POC feature list is retained for historical acceptance context.
+
+
 ## Goal
 
 A portfolio-grade **historical** Brazilian e-commerce delivery intelligence dashboard, implemented as a locally running static SPA, showcasing trustworthy mixed-grain analytics, linked React+D3 visualizations and drill-through into Olist orders. It is **not** a carrier tracking platform or a complete Brazilian retail market sample.

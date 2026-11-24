@@ -8,7 +8,7 @@
 | ADR-02 | D3 layouts/scales with React-owned SVG | Strong interactive showcase, testable lifecycle |
 | ADR-03 | Python + **DuckDB only** for P0 ETL | Consistent SQL transforms and minimal dependencies |
 | ADR-04 | Explicit separate order/item grains and single metric engine | Prevent duplication and mixed-grain errors |
-| ADR-05 | Single `useReducer` filter state with `set_flow_pair`; no `selectedSankeyLink` | Atomic and consistent chart selections |
+| ADR-05 | WU-05: one `useReducer` with multi-select groups plus independent `focusedFlow`; earlier `set_flow_pair` retired | OR within groups, AND across groups, with context-preserving Sankey drill-down |
 | ADR-06 | 27-state TopoJSON + `d3-geo` | Correct complexity for state-level map |
 | ADR-07 | **Skip Olist geolocation CSV for P0** | ZIP has state codes in seller/customer tables; avoid huge unnecessary join |
 | ADR-08 | Compact `orders.json`, `items.json`, `metadata.json`; no `geo-flows.json` | Live client cross-filtering needs record-grain data |
@@ -21,7 +21,8 @@
 | ADR-15 | Trend X-domain fixed to all history; month selection highlights instead of collapsing | Keep navigation usable |
 | ADR-16 | Sankey P0 uses **top 15 directed links weighted by item count**, same-state flows retained | Readability and additive semantics |
 | ADR-17 | Theme/responsive checks while building charts; Playwright P1 | Avoid end-loaded QA and tool setup |
-| ADR-18 | Five bounded WUs, WU-00 through WU-04 | Smaller assignments, unchanged scope |
+| ADR-18 | Five bounded baseline WUs, WU-00 through WU-04 | Smaller assignments, unchanged original scope |
+| ADR-19 | WU-05 is a post-POC enhancement, not a silent rewrite of the baseline release | Source filters and Sankey behavior superseded as recorded in `WU05_SPEC.md` |
 
 ## Main risk register
 

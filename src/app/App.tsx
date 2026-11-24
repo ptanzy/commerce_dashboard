@@ -9,7 +9,7 @@ import { useDashboardData } from './useDashboardData';
 import { useTheme } from './theme';
 import type { DashboardTheme } from './theme';
 import type { DashboardDataset } from '../data/loader';
-import { selectCohort, computeMetrics } from '../domain/selectors';
+import { selectCohort, selectFocusedFlowCohort, computeMetrics } from '../domain/selectors';
 import type { Cohort } from '../domain/selectors';
 import type { Filters, FilterAction } from '../domain/types';
 import { DEFAULT_FILTERS } from '../domain/types';
@@ -73,7 +73,7 @@ function ChartsSection({dataset, cohort, filters, dispatch}: {dataset: Dashboard
     <div className="chart-grid">
       <section className="viz-card" aria-labelledby="map-heading">
         <div className="viz-heading"><span className="future-icon"><MapPinned size={19} aria-hidden="true" /></span><div><h3 id="map-heading">Geographic distribution</h3><p>Seller origins & customer destinations</p></div></div>
-        <BrazilMap cohort={cohort} filters={filters} dispatch={dispatch}/>
+        <BrazilMap index={dataset.index} filters={filters} dispatch={dispatch}/>
       </section>
       <section className="viz-card" aria-labelledby="trend-heading">
         <div className="viz-heading"><span className="future-icon"><BarChart3 size={19} aria-hidden="true" /></span><div><h3 id="trend-heading">Delivery trends</h3><p>Historical order volume and punctuality</p></div></div>
@@ -97,15 +97,17 @@ function DataFootnote({ dataset }: {dataset: DashboardDataset}) {
 
 export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
   const [filters, dispatch] = useReducer(filterReducer, { ...DEFAULT_FILTERS });
-  const cohort = useMemo(() => selectCohort(dataset.index, filters), [dataset.index, filters]);
+  const contextCohort = useMemo(() => selectCohort(dataset.index, filters), [dataset.index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories]);
+  const cohort = useMemo(() => selectFocusedFlowCohort(contextCohort, filters.focusedFlow), [contextCohort, filters.focusedFlow]);
   const metrics = useMemo(() => computeMetrics(cohort), [cohort]);
   const options = useMemo(() => deriveFilterOptions(dataset), [dataset]);
 
   return <>
     <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} />
     {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
+    {filters.focusedFlow ? <div className="flow-focus-banner" role="status"><strong>Focused flow: {filters.focusedFlow.sellerState} → {filters.focusedFlow.customerState}</strong><span>KPIs and order explorer reflect this specific relationship. Map and Sankey retain the broader filter context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
     <KpiCards metrics={metrics} />
-    <ChartsSection dataset={dataset} cohort={cohort} filters={filters} dispatch={dispatch} />
+    <ChartsSection dataset={dataset} cohort={contextCohort} filters={filters} dispatch={dispatch} />
     <OrderExplorer index={dataset.index} cohort={cohort} filters={filters} />
     <DataFootnote dataset={dataset} />
   </>;

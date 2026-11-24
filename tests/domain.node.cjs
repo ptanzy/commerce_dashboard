@@ -37,15 +37,15 @@ test('default cohort retains zero-item orders but excludes invalid purchase date
  assert.ok(group.eligibleOrderIds.has('no_items'));assert.ok(!group.eligibleOrderIds.has('without_purchase'));
 });
 test('seller and category must match the SAME item; never explode order counts',()=>{
- const idx=fixture();const group=c(idx,{sellerState:'SP',category:'furniture'});
+ const idx=fixture();const group=c(idx,{sellerStates:['SP'],categories:['furniture']});
  assert.equal(group.eligibleOrders.length,0);assert.equal(group.eligibleItems.length,0);
- const electronics=c(idx,{sellerState:'SP',category:'electronics'});
+ const electronics=c(idx,{sellerStates:['SP'],categories:['electronics']});
  assert.equal(electronics.eligibleItems.length,6);assert.equal(electronics.eligibleOrders.length,5);
  assert.equal(electronics.eligibleOrders.filter(o=>o.orderId==='mixed').length,1);
  assert.ok(!electronics.eligibleOrderIds.has('no_items'));
 });
 test('category filtering restricts matching money; order-level KPIs remain distinct',()=>{
- const idx=fixture(), group=c(idx,{category:'furniture'}), metrics=computeMetrics(group);
+ const idx=fixture(), group=c(idx,{categories:['furniture']}), metrics=computeMetrics(group);
  assert.equal(metrics.distinctOrders,2);
  assert.equal(metrics.itemPriceBRL,230);assert.equal(metrics.freightChargeBRL,23);
  assert.equal(metrics.freightToPriceRatio,0.1);
@@ -67,9 +67,9 @@ test('unknown/negative delivery and missing actual excluded, early and on-time c
  assert.equal(metrics.invalidFreightItems,1);
 });
 test('empty cohort and zero price render undefined ratios as null',()=>{
- const metrics=computeMetrics(c(fixture(),{customerState:'XX'}));
+ const metrics=computeMetrics(c(fixture(),{customerStates:['XX']}));
  assert.equal(metrics.distinctOrders,0);assert.equal(metrics.onTimeRate,null);assert.equal(metrics.medianDeliveryDays,null);assert.equal(metrics.freightToPriceRatio,null);
- const zeros=computeMetrics(c(fixture(),{customerState:'SP',category:'electronics',sellerState:'SP'}));
+ const zeros=computeMetrics(c(fixture(),{customerStates:['SP'],categories:['electronics'],sellerStates:['SP']}));
  assert.ok(zeros.itemPriceBRL>=0);
 });
 test('R-7 interpolation and fractional days',()=>{

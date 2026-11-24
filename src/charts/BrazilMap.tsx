@@ -5,7 +5,8 @@ import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { MapPin, RefreshCcw } from 'lucide-react';
 import type { Dispatch } from 'react';
-import type { Cohort } from '../domain/selectors';
+import type { DataIndex } from '../data/indexes';
+import { selectCohort } from '../domain/selectors';
 import { destinationStateOrderCounts, originStateOrderCounts } from '../domain/selectors';
 import type { FilterAction, Filters } from '../domain/types';
 import { BRAZIL_STATES, stateLabel } from '../components/stateNames';
@@ -65,12 +66,19 @@ function useBrazilGeography(): MapStatus {
   return result;
 }
 
-export function BrazilMap({cohort, filters, dispatch}: {cohort: Cohort; filters: Filters; dispatch: Dispatch<FilterAction>}) {
+export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
   const [mode, setMode] = useState<MapMode>('origin');
   const geo = useBrazilGeography();
-  const counts = useMemo(() => mode === 'origin' ? originStateOrderCounts(cohort) : destinationStateOrderCounts(cohort), [cohort, mode]);
+  // Ignore only the displayed dimension, so users can add another state without its count disappearing.
+  // A focused Sankey flow is visual emphasis, not a constraint on this context map.
+  const context = useMemo(() => selectCohort(index, {
+    ...filters, focusedFlow: null,
+    ...(mode === 'origin' ? {sellerStates: []} : {customerStates: []}),
+  }), [index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories, mode]);
+  const counts = useMemo(() => mode === 'origin' ? originStateOrderCounts(context) : destinationStateOrderCounts(context), [context, mode]);
   const max = useMemo(() => Math.max(0, ...counts.values()), [counts]);
-  const active = mode === 'origin' ? filters.sellerState : filters.customerState;
+  const active = mode === 'origin' ? filters.sellerStates : filters.customerStates;
+  const focusedState = mode === 'origin' ? filters.focusedFlow?.sellerState : filters.focusedFlow?.customerState;
   const rows = useMemo(() => UF_CODES.map(code => ({code, name: BRAZIL_STATES[code], count: counts.get(code) ?? 0})), [counts]);
   const paths = useMemo(() => {
     if (geo.status !== 'ready') return [];
@@ -80,13 +88,12 @@ export function BrazilMap({cohort, filters, dispatch}: {cohort: Cohort; filters:
   }, [geo]);
 
   const selectState = (code: string) => {
-    if (mode === 'origin') dispatch({type:'set_seller_state', state: filters.sellerState === code ? null : code});
-    else dispatch({type:'set_customer_state', state: filters.customerState === code ? null : code});
+    dispatch({type:'toggle_value', dimension: mode === 'origin' ? 'sellerStates' : 'customerStates', value:code});
   };
   const modeLabel = mode === 'origin' ? 'Seller origins' : 'Customer destinations';
   const modeExplanation = mode === 'origin'
-    ? 'Distinct orders having at least one matching seller item in each state. An order may occur in multiple origin states.'
-    : 'Distinct eligible orders by customer state. Each order belongs to one destination state.';
+    ? 'Contextual order counts by seller state. Click multiple states to add/remove selections; other origin states stay visible.'
+    : 'Contextual order counts by customer destination. Click multiple states to add/remove selections.';
 
   return <div className="viz-body map-body">
     <div className="viz-controls"><div className="pill-switch" role="group" aria-label="Map geography view">
@@ -102,18 +109,18 @@ export function BrazilMap({cohort, filters, dispatch}: {cohort: Cohort; filters:
         {paths.map(({code,d}) => {
           const count = counts.get(code) ?? 0;
           const bucket = count === 0 ? 0 : Math.min(5, Math.max(1, Math.ceil((count / (max || 1)) ** 0.58 * 5)));
-          return <path key={code} d={d} className={`brazil-region map-bucket-${bucket}${active === code ? ' map-selected' : ''}`} onClick={() => selectState(code)}>
-            <title>{stateLabel(code)} — {formatInteger(count)} {mode === 'origin' ? 'orders with matching seller items' : 'customer orders'}{active === code ? ' (selected; click to clear)' : ' (click to filter)'}</title>
+          return <path key={code} d={d} className={`brazil-region map-bucket-${bucket}${active.includes(code) ? ' map-selected' : ''}${focusedState === code ? ' map-focus' : ''}`} onClick={() => selectState(code)}>
+            <title>{stateLabel(code)} — {formatInteger(count)} {mode === 'origin' ? 'orders with matching seller items' : 'customer orders'}{active.includes(code) ? ' (selected; click to remove)' : ' (click to add to selection)'}</title>
           </path>;
         })}
       </svg><div className="map-legend"><span>No matching records</span><span className="map-swatches">{[0,1,2,3,4,5].map(i => <i key={i} className={`map-bucket-${i}`} aria-hidden="true" />)}</span><span>Higher count</span></div></div>
       <div className="state-list-panel"><div className="state-list-title">{modeLabel} <span>SELECT A STATE</span></div>
         <div className="state-list" role="group" aria-label={`${modeLabel} state selection`}>
-          {rows.map(({code,name,count}) => <button type="button" className={`state-option${active === code ? ' state-option-active' : ''}`} aria-pressed={active === code} key={code} onClick={() => selectState(code)} title={`${name}: ${formatInteger(count)} distinct orders`}>
+          {rows.map(({code,name,count}) => <button type="button" className={`state-option${active.includes(code) ? ' state-option-active' : ''}${focusedState === code ? ' state-option-focused' : ''}`} aria-pressed={active.includes(code)} key={code} onClick={() => selectState(code)} title={`${name}: ${formatInteger(count)} distinct orders`}>
             <span><strong>{code}</strong> {name}</span><span>{formatInteger(count)}</span>
           </button>)}
         </div>
-        {active ? <button type="button" className="viz-clear" onClick={() => selectState(active)}>Clear {mode === 'origin' ? 'origin' : 'destination'} selection</button> : null}
+        {active.length ? <button type="button" className="viz-clear" onClick={()=>dispatch({type:'clear_dimension',dimension:mode === 'origin' ? 'sellerStates' : 'customerStates'})}>Clear selected {mode === 'origin' ? 'origins' : 'destinations'}</button> : null}
       </div>
     </div> : null}
     <p className="viz-smallprint">State geography only, not GPS routes. Seller-origin counts can overlap across states; they should not be summed into the national order KPI.</p>

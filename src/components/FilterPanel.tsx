@@ -1,7 +1,8 @@
-import { CalendarDays, Filter, RotateCcw, X } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarDays, Filter, RotateCcw, Search, X } from 'lucide-react';
 import type { Dispatch } from 'react';
 import { categoryLabel } from '../domain/selectors';
-import type { FilterAction, Filters } from '../domain/types';
+import type { FilterAction, Filters, MultiDimension } from '../domain/types';
 import { stateLabel } from './stateNames';
 
 export interface FilterOptions {
@@ -26,9 +27,44 @@ function SelectedChip({ label, onClear }: {label: string; onClear: () => void}) 
   </button>;
 }
 
+interface MultiFilterProps {
+  label: string;
+  values: readonly string[];
+  options: readonly string[];
+  dimension: MultiDimension;
+  dispatch: Dispatch<FilterAction>;
+  display: (value: string) => string;
+  searchable?: boolean;
+}
+
+function MultiFilter({ label, values, options, dimension, display, dispatch, searchable = false }: MultiFilterProps) {
+  const [query,setQuery] = useState('');
+  const filtered = searchable ? options.filter(value => display(value).toLowerCase().includes(query.trim().toLowerCase())) : options;
+  return <div className="field multi-filter-field">
+    <span className="field-label">{label} <span className="label-hint">(multi-select)</span></span>
+    <details className="multi-filter" onKeyDown={event=>{if(event.key==='Escape') (event.currentTarget as HTMLDetailsElement).open=false;}}>
+      <summary className="field-control multi-filter-trigger" aria-label={label}>
+        {values.length === 0 ? `All ${label.toLowerCase()}` : values.length === 1 ? display(values[0]) : `${values.length} selected`}
+        <span aria-hidden="true" className="multi-filter-chevron">⌄</span>
+      </summary>
+      <div className="multi-filter-menu">
+        <div className="multi-filter-toolbar"><span>{values.length} selected</span>{values.length ? <button type="button" onClick={()=>dispatch({type:'clear_dimension',dimension})}>Clear group</button> : null}</div>
+        {searchable ? <label className="multi-filter-search"><Search size={15} aria-hidden="true"/><span className="sr-only">Search {label.toLowerCase()}</span><input aria-label={`Search ${label.toLowerCase()}`} type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Find a category…"/></label> : null}
+        <div className="multi-filter-options" role="group" aria-label={`${label} options`}>
+          {filtered.map(value => <label key={value} className="multi-filter-option">
+            <input type="checkbox" aria-label={`${label}: ${display(value)}`} checked={values.includes(value)} onChange={()=>dispatch({type:'toggle_value',dimension,value})} />
+            <span>{display(value)}</span>
+          </label>)}
+          {filtered.length === 0 ? <p className="multi-filter-no-options">No matching categories.</p> : null}
+        </div>
+      </div>
+    </details>
+  </div>;
+}
+
 export function FilterPanel({ filters, dispatch, options, matchedCount, totalCount }: Props) {
   const dateActive = filters.purchaseDateFrom !== null || filters.purchaseDateTo !== null;
-  const active = Number(dateActive) + Number(Boolean(filters.customerState)) + Number(Boolean(filters.sellerState)) + Number(Boolean(filters.category));
+  const active = Number(dateActive) + filters.customerStates.length + filters.sellerStates.length + filters.categories.length + Number(filters.focusedFlow !== null);
   const handleDateFrom = (from: string | null) => dispatch({type: 'set_date_range', from, to: filters.purchaseDateTo && from && from > filters.purchaseDateTo ? null : filters.purchaseDateTo});
   const handleDateTo = (to: string | null) => dispatch({type: 'set_date_range', from: filters.purchaseDateFrom && to && to < filters.purchaseDateFrom ? null : filters.purchaseDateFrom, to});
 
@@ -38,7 +74,7 @@ export function FilterPanel({ filters, dispatch, options, matchedCount, totalCou
         <span className="section-icon"><Filter size={16} aria-hidden="true" /></span>
         <div>
           <h2 className="section-title">Refine your view</h2>
-          <p className="section-subtitle">All filters apply across the same order cohort</p>
+          <p className="section-subtitle">OR within each group · AND between groups · Focus a Sankey flow without losing context</p>
         </div>
       </div>
       <button className="reset-button" type="button" onClick={() => dispatch({type:'clear_all'})} disabled={active === 0}>
@@ -47,30 +83,9 @@ export function FilterPanel({ filters, dispatch, options, matchedCount, totalCou
     </div>
 
     <div className="filter-grid">
-      <label className="field">
-        <span className="field-label">Seller origin <span className="label-hint">(UF)</span></span>
-        <select aria-label="Seller origin" className="field-control" value={filters.sellerState ?? ''}
-          onChange={(event) => dispatch({type:'set_seller_state',state:event.target.value || null})}>
-          <option value="">All seller states</option>
-          {options.sellers.map((state) => <option key={state} value={state}>{stateLabel(state)}</option>)}
-        </select>
-      </label>
-      <label className="field">
-        <span className="field-label">Customer destination <span className="label-hint">(UF)</span></span>
-        <select aria-label="Customer destination" className="field-control" value={filters.customerState ?? ''}
-          onChange={(event) => dispatch({type:'set_customer_state',state:event.target.value || null})}>
-          <option value="">All customer states</option>
-          {options.customers.map((state) => <option key={state} value={state}>{stateLabel(state)}</option>)}
-        </select>
-      </label>
-      <label className="field">
-        <span className="field-label">Product category</span>
-        <select aria-label="Product category" className="field-control" value={filters.category ?? ''}
-          onChange={(event) => dispatch({type:'set_category',category:event.target.value || null})}>
-          <option value="">All categories</option>
-          {options.categories.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}
-        </select>
-      </label>
+      <MultiFilter label="Seller origins" values={filters.sellerStates} options={options.sellers} dimension="sellerStates" dispatch={dispatch} display={stateLabel}/>
+      <MultiFilter label="Customer destinations" values={filters.customerStates} options={options.customers} dimension="customerStates" dispatch={dispatch} display={stateLabel}/>
+      <MultiFilter label="Product categories" values={filters.categories} options={options.categories} dimension="categories" dispatch={dispatch} display={categoryLabel} searchable />
       <fieldset className="date-fieldset">
         <legend className="field-label">Purchase date <span className="label-hint">(inclusive)</span></legend>
         <div className="date-fields">
@@ -96,10 +111,11 @@ export function FilterPanel({ filters, dispatch, options, matchedCount, totalCou
       <div className="flex min-h-8 flex-1 flex-wrap items-center gap-2" aria-label="Active filters">
         {active === 0 ? <span className="all-data-pill"><span className="live-dot" /> All historical data · No filters applied</span> : <>
           <span className="active-label">Active filters</span>
-          {filters.sellerState && <SelectedChip label={`Origin: ${filters.sellerState}`} onClear={() => dispatch({type:'set_seller_state',state:null})} />}
-          {filters.customerState && <SelectedChip label={`Destination: ${filters.customerState}`} onClear={() => dispatch({type:'set_customer_state',state:null})} />}
-          {filters.category && <SelectedChip label={`Category: ${categoryLabel(filters.category)}`} onClear={() => dispatch({type:'set_category',category:null})} />}
+          {filters.sellerStates.map(code=><SelectedChip key={`o-${code}`} label={`Origin: ${code}`} onClear={()=>dispatch({type:'toggle_value',dimension:'sellerStates',value:code})}/>)}
+          {filters.customerStates.map(code=><SelectedChip key={`d-${code}`} label={`Destination: ${code}`} onClear={()=>dispatch({type:'toggle_value',dimension:'customerStates',value:code})}/>)}
+          {filters.categories.map(category=><SelectedChip key={`c-${category}`} label={`Category: ${categoryLabel(category)}`} onClear={()=>dispatch({type:'toggle_value',dimension:'categories',value:category})}/>)}
           {dateActive && <SelectedChip label={`Date: ${filters.purchaseDateFrom ?? 'Start'} – ${filters.purchaseDateTo ?? 'End'}`} onClear={() => dispatch({type:'set_date_range',from:null,to:null})} />}
+          {filters.focusedFlow && <SelectedChip label={`Focused flow: ${filters.focusedFlow.sellerState} → ${filters.focusedFlow.customerState}`} onClear={()=>dispatch({type:'clear_flow_focus'})}/>}
         </>}
       </div>
       <span className="result-count" role="status" aria-live="polite">{matchedCount.toLocaleString('en-US')} <span>of {totalCount.toLocaleString('en-US')} orders</span></span>

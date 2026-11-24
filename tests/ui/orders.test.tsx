@@ -34,7 +34,7 @@ describe('WU-04 analytical order explorer contracts',()=>{
   });
 
   it('uses only matched items in rows, but details keep complete original order totals',()=>{
-    const f={...filters,sellerState:'SP',category:'health_beauty'};
+    const f={...filters,sellerStates:['SP'],categories:['health_beauty']};
     const cohort=selectCohort(dataset.index,f);
     const rows=selectExplorerOrders(cohort);
     expect(rows).toHaveLength(1);
@@ -107,7 +107,7 @@ describe('WU-04 analytical order explorer contracts',()=>{
   });
 
   it('honors the chart-applied cohort, including empty seller/category intersection',()=>{
-    const f={...filters,sellerState:'SP',category:'books'};
+    const f={...filters,sellerStates:['SP'],categories:['books']};
     explorer(selectCohort(dataset.index,f),f);
     expect(screen.getByText(/No orders match the current dashboard filters/)).toBeInTheDocument();
     expect(screen.getByText('Showing 0 of 0 eligible orders')).toBeInTheDocument();

@@ -11,7 +11,8 @@ const W = 860, H = 294, L = 62, R = 18, T = 22, B = 51;
 
 export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
   const [measure, setMeasure] = useState<TrendMeasure>('orders');
-  const months = useMemo(() => monthlyTrendContext(index,filters), [index,filters]);
+  const months = useMemo(() => monthlyTrendContext(index,filters), [index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.customerStates,filters.sellerStates,filters.categories]);
+  const focusedMonths = useMemo(() => filters.focusedFlow ? monthlyTrendContext(index,filters,30,filters.focusedFlow) : null, [index,filters]);
   const x = useMemo(() => scaleBand<string>().domain(months.map(m => m.month)).range([L, W-R]).paddingInner(.20).paddingOuter(.08), [months]);
   const maxOrders = Math.max(1,...months.map(m => m.distinctOrders));
   const y = scaleLinear().domain([0, measure === 'orders' ? maxOrders * 1.08 : 1]).nice(measure === 'orders' ? 5 : 4).range([H-B,T]);
@@ -24,7 +25,7 @@ export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; fi
       <button type="button" aria-pressed={measure === 'orders'} className={measure === 'orders' ? 'is-active' : ''} onClick={() => setMeasure('orders')}>Order volume</button>
       <button type="button" aria-pressed={measure === 'onTime'} className={measure === 'onTime' ? 'is-active' : ''} onClick={() => setMeasure('onTime')}>On-time rate</button>
     </div><span className="viz-meta">{months.length} historical months</span></div>
-    <p className="viz-caption">Historical context keeps all months visible under the current seller, destination and category filters. The highlighted dates filter KPIs, map and flows.</p>
+    <p className="viz-caption">The full timeline remains visible. Global filters set the context; when a flow is focused, brighter bars show its monthly orders or on-time rate. Highlighted dates filter the dashboard.</p>
     {months.length === 0 ? <div className="viz-empty" role="status">No valid historical purchase dates are available.</div> : <>
       <div className="trend-plot"><svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${measure === 'orders' ? 'Monthly order count' : 'Monthly on-time delivery rate'} across the full historical purchase period. Selected date intervals are highlighted.`}>
         <title>Olist {measure === 'orders' ? 'monthly order volume' : 'monthly on-time percentage'} — full date context</title>
@@ -32,13 +33,16 @@ export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; fi
         {months.map((month,i) => {
           const value = measure === 'orders' ? month.distinctOrders : month.onTimeRate;
           const from = y(value ?? 0), barWidth = x.bandwidth();
+          const focusedMonth = focusedMonths?.[i];
+          const focusedValue = focusedMonth ? (measure === 'orders' ? focusedMonth.distinctOrders : focusedMonth.onTimeRate) : null;
           const xPos = x(month.month) ?? L;
           const partialEdge = i === 0 || i === months.length-1;
           const sparse = (measure === 'onTime' ? month.onTimeDenominator : month.distinctOrders) < 30;
-          const title = `${month.month}: ${formatInteger(month.distinctOrders)} orders; ${formatPercentage(month.onTimeRate)} on time (${formatInteger(month.onTimeDenominator)} eligible)${sparse ? '; small sample' : ''}${partialEdge ? '; edge month may be partial' : ''}. ${month.selected ? 'Within selected date range' : 'Outside selected date range'}`;
+          const title = `${month.month}: ${formatInteger(month.distinctOrders)} orders; ${formatPercentage(month.onTimeRate)} on time (${formatInteger(month.onTimeDenominator)} eligible)${sparse ? '; small sample' : ''}${partialEdge ? '; edge month may be partial' : ''}${focusedMonth ? `; focused ${formatInteger(focusedMonth.distinctOrders)} orders, ${formatPercentage(focusedMonth.onTimeRate)} on time` : ''}. ${month.selected ? 'Within selected date range' : 'Outside selected date range'}`;
           return <g key={month.month}>
             {month.selected && selectedDates ? <rect className="trend-selected-column" x={xPos-2} y={T-8} width={barWidth+4} height={H-B-T+16} rx={3}/> : null}
-            {value !== null && value > 0 ? <rect x={xPos} y={from} width={barWidth} height={Math.max(1,y(0)-from)} className={`trend-bar${month.selected ? '' : ' trend-muted'}${sparse ? ' trend-sparse' : ''}`} rx={Math.min(2,barWidth/3)} /> : null}
+            {value !== null && value > 0 ? <rect x={xPos} y={from} width={barWidth} height={Math.max(1,y(0)-from)} className={`trend-bar${month.selected ? '' : ' trend-muted'}${sparse ? ' trend-sparse' : ''}${focusedMonths ? ' trend-context-bar' : ''}`} rx={Math.min(2,barWidth/3)} /> : null}
+            {focusedMonths && focusedValue !== null && focusedValue > 0 ? <rect x={xPos + barWidth*0.16} y={y(focusedValue)} width={barWidth*0.68} height={Math.max(1,y(0)-y(focusedValue))} className={`trend-focus-bar${month.selected ? '' : ' trend-muted'}`} rx={Math.min(2,barWidth/3)}/> : null}
             <rect x={xPos-2} y={T} width={barWidth+4} height={H-B-T} fill="transparent" className="trend-hit" onClick={() => chooseMonth(month.month)}><title>{title} Click to filter to this month.</title></rect>
             {(i===0 || i===months.length-1 || i%3===0) ? <text className="trend-axis-label" x={xPos+barWidth/2} y={H-31} textAnchor="middle">{month.month.slice(5)}</text> : null}
             {(i===0 || month.month.endsWith('-01')) ? <text className="trend-year-label" x={xPos+barWidth/2} y={H-12} textAnchor="middle">{month.month.slice(0,4)}</text> : null}
@@ -49,7 +53,7 @@ export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; fi
       <div className="trend-bottom"><label className="trend-month-select">Select month <select value={selectedMonth ?? ''} onChange={e=>e.target.value && chooseMonth(e.target.value)} aria-label="Select purchase month">
         <option value="">Choose a month</option>{months.map(m => <option value={m.month} key={m.month}>{m.month} · {formatInteger(m.distinctOrders)} orders</option>)}
       </select></label>
-      <span className="trend-note"><span className="legend-dot"/> Highlight = current date selection · Small dots = low sample</span>
+      <span className="trend-note"><span className="legend-dot"/> Highlight = date selection · Bright bar = focused flow · Small dots = low sample</span>
       {selectedDates ? <button type="button" className="viz-clear" onClick={()=>dispatch({type:'set_date_range',from:null,to:null})}>Clear date selection</button> : null}</div>
     </>}
     <p className="viz-smallprint">Rates count only delivered orders with valid delivery and promised dates. Empty-rate months are not shown as 0%; first/last historical months may be partial. Click a bar or use month selection to change the active date range.</p>

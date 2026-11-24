@@ -1,3 +1,5 @@
+> **WU-05 extension:** Original P0 test gates remain valid as historical checks, except the single-select and Sankey click-to-filter behavior, which is superseded by `docs/WU05_SPEC.md`. Use its multi-select/focus acceptance walkthrough and additional Node/RTL tests for WU-05.
+
 # Testing and Acceptance — canonical POC v2
 
 ## Principles
