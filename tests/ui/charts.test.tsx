@@ -47,7 +47,7 @@ describe('WU-05 contextual map',()=>{
     expect(screen.getByRole('button',{name:'Clear Destination: MG filter'})).toBeInTheDocument();
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('1');
     expect(screen.getByRole('button',{name:'Clear Origin: SP filter'})).toBeInTheDocument();
-  });
+  }, 15000); // CI/Windows can take >5s to mount the complete dashboard; scoped timeout only.
 });
 
 describe('WU-05 contextual trend and non-destructive Sankey focus',()=>{

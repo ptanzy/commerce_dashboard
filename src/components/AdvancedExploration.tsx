@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { clockNow, recordEvent, recordUserAction, recordTiming, setDiagnosticView } from '../observability/diagnostics';
+import { useEffect, useMemo, useState } from 'react';
+import { registerRecoveryHandler } from '../observability/recovery';
 import { BarChart3, Download, FileText, Layers3, TrendingUp } from 'lucide-react';
 import type { DataIndex } from '../data/indexes';
 import type { Cohort, Metrics } from '../domain/selectors';
@@ -24,7 +26,7 @@ export function CategoryLeaderboard({cohort}: {cohort:Cohort}){
   return <section className="viz-card insight-card" aria-labelledby="category-ranking-title">
     <div className="viz-heading"><span className="future-icon"><Layers3 size={18} aria-hidden="true"/></span><div><h3 id="category-ranking-title">Product category leaderboard</h3><p>Matching items · order-level performance</p></div></div>
     <div className="viz-body insight-body">
-      <div className="insight-measures" role="group" aria-label="Category ranking measurement">{(Object.keys(CATEGORY_METRICS) as CategoryMeasure[]).map(key=><button type="button" key={key} aria-pressed={metric===key} className={metric===key?'is-active':''} onClick={()=>setMetric(key)}>{CATEGORY_METRICS[key]}</button>)}</div>
+      <div className="insight-measures" role="group" aria-label="Category ranking measurement">{(Object.keys(CATEGORY_METRICS) as CategoryMeasure[]).map(key=><button type="button" key={key} aria-pressed={metric===key} className={metric===key?'is-active':''} onClick={()=>{recordUserAction('CATEGORY_MEASURE_CHANGED','analytics');setDiagnosticView('categoryMeasure',key);setMetric(key);}}>{CATEGORY_METRICS[key]}</button>)}</div>
       {rows.length ? <ol className="category-bars">{rows.map((row,i)=>{
         const weight=metric==='orders'?row.distinctOrders:metric==='value'?row.itemValueBRL??0:metric==='freight'?row.freightBRL??0:row.onTimeDenominator>=30?row.onTimeRate??0:0;
         const eligible=metric!=='onTime'||row.onTimeDenominator>=30;
@@ -89,16 +91,41 @@ export function PeriodComparisonPanel({index,filters,metrics}: {index:DataIndex;
 /** Export selected DASHBOARD cohort (not the explorer's local search query). */
 export function CsvExportButton({cohort}: {cohort:Cohort}){
   const [status,setStatus]=useState('');
-  function download(){
+  function download():boolean{
+    recordUserAction('CSV_EXPORT_REQUESTED','analytics');
+    const started=clockNow();
+    let objectUrl:string|undefined;
+    let cleanupScheduled=false;
+    let link:HTMLAnchorElement|undefined;
     try {
-      const csv=exportCohortCsv(cohort),blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-      const url=URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download='olist-filtered-orders.csv';document.body.appendChild(link);link.click();link.remove();
+      const csv=exportCohortCsv(cohort);
+      objectUrl=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+      link=document.createElement('a');
+      link.href=objectUrl;
+      link.download='olist-filtered-orders.csv';
+      document.body.appendChild(link);
+      link.click();
+      const url=objectUrl;
       const revoke=URL.revokeObjectURL.bind(URL);
       window.setTimeout(()=>revoke(url),1000);
+      cleanupScheduled=true;
+      recordTiming('csv_export',clockNow()-started);
+      recordEvent('info','CSV_EXPORTED','analytics',cohort.eligibleOrders.length);
       setStatus(`Prepared ${formatInteger(cohort.eligibleOrders.length)} filtered order rows.`);
-    }catch {setStatus('CSV export failed. Try again from the dashboard.');}
+      return true;
+    } catch {
+      recordTiming('csv_export',clockNow()-started);
+      recordEvent('error','CSV_EXPORT_FAILED','analytics');
+      setStatus('CSV export failed. Try again from the dashboard.');
+      return false;
+    } finally {
+      link?.remove();
+      if (objectUrl && !cleanupScheduled) {
+        try {URL.revokeObjectURL(objectUrl);} catch { /* cleanup best-effort */ }
+      }
+    }
   }
+  useEffect(()=>registerRecoveryHandler('csv','retry',download),[cohort]);
   return <div className="csv-export"><button type="button" className="csv-export-button" onClick={download} disabled={!cohort.eligibleOrders.length}><Download size={15} aria-hidden="true"/>Export filtered orders (CSV)</button>
     <span className="csv-export-meta"><FileText size={13} aria-hidden="true"/> {formatInteger(cohort.eligibleOrders.length)} orders · all matching dashboard filters and focused flows</span>
     {status?<span role="status" className="csv-export-meta">{status}</span>:null}

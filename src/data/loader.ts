@@ -1,3 +1,5 @@
+import { fetchWithTransientRetry } from '../observability/recovery';
+import { clockNow, recordTiming } from '../observability/diagnostics';
 import type { DataIndex } from './indexes';
 import type { DataManifest } from '../domain/types';
 import { validateDataset } from './validate';
@@ -17,7 +19,7 @@ function assetUrl(name: string): string {
 async function getJson(name: string, signal: AbortSignal, fetchJson: JsonFetch): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetchJson(assetUrl(name), { signal });
+    response = await fetchWithTransientRetry(assetUrl(name), signal, fetchJson);
   } catch (error) {
     if (signal.aborted) throw error;
     throw new Error(`Could not fetch ${name}. Check that the local Vite server is running.`, { cause: error });
@@ -40,5 +42,8 @@ export async function loadDashboardData(signal: AbortSignal, fetchJson: JsonFetc
     getJson('items.json', signal, fetchJson),
   ]);
   if (signal.aborted) throw new DOMException('Data loading aborted', 'AbortError');
-  return validateDataset(orders, items, metadata);
+  const start = clockNow();
+  const result = validateDataset(orders,items,metadata);
+  recordTiming('dataset_validation',clockNow()-start);
+  return result;
 }

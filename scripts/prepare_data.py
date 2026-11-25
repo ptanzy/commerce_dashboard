@@ -7,6 +7,9 @@ Only the SIX required business CSVs are extracted or read. No geolocation proces
 """
 from __future__ import annotations
 
+from time import perf_counter
+from ops_logging import emit_pipeline_event
+
 import argparse
 from collections import Counter
 from contextlib import contextmanager
@@ -281,7 +284,15 @@ def main() -> None:
     parser.add_argument("--input", type=Path, default=Path("data/raw/olist.zip"))
     parser.add_argument("--output", type=Path, default=Path("public/data"))
     args = parser.parse_args()
-    prepare(args.input, args.output)
+    started = perf_counter()
+    emit_pipeline_event("data", "info", "PIPELINE_STARTED")
+    try:
+        report = prepare(args.input, args.output)
+    except Exception:
+        emit_pipeline_event("data", "error", "PIPELINE_FAILED", (perf_counter() - started) * 1000)
+        raise
+    emit_pipeline_event("data", "info", "PIPELINE_COMPLETED",
+                        (perf_counter() - started) * 1000, report["manifest"]["orderCount"])
 
 
 if __name__ == "__main__":

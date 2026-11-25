@@ -521,3 +521,108 @@ h1,h2,h3 { font-family:'Segoe UI',Arial,system-ui,sans-serif; }
 .csv-export-button:disabled {opacity:.45;cursor:not-allowed;}.csv-export-meta {display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;}
 @media(max-width:900px) {.advanced-grid{grid-template-columns:1fr;}}
 @media(max-width:479px) {.saved-views{padding:12px;}.saved-controls{gap:6px;}.saved-input,.saved-select{flex-basis:100%;}.category-row{grid-template-columns:18px minmax(75px,1fr) minmax(26px,.6fr) 65px;gap:5px;}.delay-row{grid-template-columns:90px minmax(20px,1fr) 35px 37px;gap:5px;}.insight-body{padding:12px;}.period-grid-row,.period-grid-head{grid-template-columns:minmax(94px,1.3fr) repeat(3,minmax(43px,1fr));gap:5px;font-size:10px;}}
+
+/* WU-08: opt-in, local diagnostics; no network telemetry. */
+.diagnostics-control { position:relative; }
+.diagnostics-trigger { display:inline-flex;align-items:center;gap:7px;border:1px solid var(--stroke);border-radius:9px;padding:9px 11px;color:var(--muted);background:var(--panel-subtle);font-size:11px;font-weight:750;white-space:nowrap; }
+.diagnostics-trigger:hover,.diagnostics-trigger[aria-expanded='true'] { color:var(--accent);border-color:var(--stroke-strong); }
+.diagnostics-panel { position:absolute;right:0;top:calc(100% + 12px);z-index:90;width:min(520px,calc(100vw - 30px));max-height:min(75vh,720px);overflow:auto;padding:17px;border:1px solid var(--stroke-strong);border-radius:12px;background:var(--panel);box-shadow:0 16px 45px var(--shadow);color:var(--text);font-size:11px;line-height:1.5; }
+.diagnostics-heading { display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--heading);font-size:14px; }
+.diagnostics-heading button { display:grid;place-items:center;min-width:30px;min-height:30px;border-radius:7px;background:var(--panel-subtle); }
+.diagnostics-disclaimer { margin:9px 0 12px;color:var(--muted); }
+.diagnostics-session { display:flex;flex-wrap:wrap;align-items:center;gap:5px 11px;padding:10px 12px;border:1px solid var(--stroke);border-radius:8px;background:var(--panel-subtle);font-variant-numeric:tabular-nums; }
+.diagnostics-session strong { color:var(--heading);width:100%;font-size:12px; }
+.diagnostics-session span { color:var(--muted);overflow-wrap:anywhere; }
+.diagnostics-panel h3 { font-size:12px;color:var(--heading);margin:14px 0 8px; }
+.diagnostics-health { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px; }
+.diagnostics-health>div { display:flex;flex-direction:column;gap:3px;padding:9px;background:var(--panel-subtle);border:1px solid var(--stroke);border-radius:7px; }
+.diagnostics-health span { color:var(--muted); }
+.diagnostics-health strong { color:var(--accent);text-transform:capitalize; }
+.diagnostics-table-wrap { overflow-x:auto; }
+.diagnostics-panel table { border-collapse:collapse;width:100%;font-size:10px;font-variant-numeric:tabular-nums; }
+.diagnostics-panel th,.diagnostics-panel td {padding:7px 6px;text-align:left;border-bottom:1px solid var(--stroke);white-space:nowrap;}
+.diagnostics-panel th { color:var(--muted); }
+.diagnostics-events { max-height:175px;overflow:auto;background:var(--panel-subtle);border-radius:8px;padding:10px; }
+.diagnostics-events ol { list-style:none;padding:0;margin:0; }
+.diagnostics-events li { display:flex;flex-wrap:wrap;gap:7px;padding:5px 0;border-bottom:1px solid var(--stroke);font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
+.diagnostics-events li strong { color:var(--accent); }
+.diagnostics-actions { display:flex;flex-wrap:wrap;gap:8px;margin-top:14px; }
+.diagnostics-actions button { display:inline-flex;align-items:center;gap:5px;background:var(--panel-subtle);border:1px solid var(--stroke);border-radius:7px;color:var(--heading);padding:8px 10px;font-size:11px; }
+.diagnostics-actions button:hover { border-color:var(--accent); }
+.diagnostics-notice { color:var(--muted);margin-top:8px; }
+.diagnostic-recovery { margin:12px 0;padding:20px;border:1px solid var(--stroke-strong);background:var(--panel);border-radius:11px; }
+.diagnostic-recovery strong { color:var(--heading); }
+.diagnostic-recovery p { margin:8px 0 14px;color:var(--muted);font-size:12px; }
+.diagnostic-recovery button { margin-right:8px;margin-bottom:6px;padding:8px 11px;border-radius:7px;border:1px solid var(--stroke-strong);color:var(--heading);background:var(--panel-subtle); }
+@media (max-width:700px) {
+ .topbar-actions {gap:8px;}
+ .diagnostics-trigger {padding:8px;font-size:0;gap:0;}
+ .diagnostics-trigger svg {width:18px;height:18px;}
+ .diagnostics-health {grid-template-columns:1fr;}
+}
+
+/* WU-08 extension: readable diagnostics on both themes and narrow screens. */
+.diagnostics-panel {width:min(620px,calc(100vw - 30px));max-height:min(83vh,840px);}
+.diagnostics-facts {display:grid;grid-template-columns:minmax(135px,1fr) minmax(100px,1fr);gap:6px 10px;border:1px solid var(--stroke);border-radius:8px;background:var(--panel-subtle);padding:11px;overflow-wrap:anywhere;}
+.diagnostics-facts span {color:var(--muted);}
+.diagnostics-facts strong {font-weight:700;color:var(--heading);font-variant-numeric:tabular-nums;}
+.diagnostics-muted {font-size:10px;line-height:1.5;color:var(--muted);margin:7px 0;}
+.diagnostics-filters {display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:8px;margin:8px 0;}
+.diagnostics-filters label {display:flex;flex-direction:column;gap:4px;color:var(--muted);}
+.diagnostics-filters input,.diagnostics-filters select {width:100%;min-width:0;padding:7px;background:var(--panel-subtle);color:var(--heading);border:1px solid var(--stroke);border-radius:6px;}
+@media(max-width:479px) {.diagnostics-filters {grid-template-columns:1fr 1fr;}.diagnostics-filters label:last-child {grid-column:span 2;}.diagnostics-panel {padding:12px;}}
+
+/* WU-08 recovery center: compact, reversible and usable in either theme. */
+.recovery-center{margin:1rem 0;padding:1rem;border:1px solid var(--border,rgba(120,130,150,.35));border-radius:12px}
+.recovery-center h3{display:flex;gap:.5rem;align-items:center;margin:.1rem 0 .6rem;font-size:1rem}
+.recovery-issues{display:grid;gap:.75rem;margin:.6rem 0}
+.recovery-issue{border:1px solid var(--border,rgba(120,130,150,.28));border-radius:9px;padding:.85rem;overflow-wrap:anywhere}
+.recovery-issue-heading{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.recovery-issue-heading strong{flex:1;min-width:7rem}
+.recovery-issue-heading span{font-size:.75rem;opacity:.7}
+.recovery-issue p{margin:.5rem 0;line-height:1.5;font-size:.84rem}
+.recovery-healthy{display:flex;align-items:center;gap:.5rem;font-size:.85rem}
+.recovery-history{margin-top:.8rem}
+.recovery-history ol{padding:0;list-style:none}
+.recovery-history li{display:flex;gap:.7rem;justify-content:space-between;padding:.25rem 0;font-size:.82rem}
+.recovery-center button:disabled{opacity:.5;cursor:not-allowed}
+
+/* WU-08: developer investigations, scoped to diagnostics and theme tokens. */
+.developer-investigation { border:1px solid var(--stroke);border-radius:12px;padding:15px;margin-block:16px;background:var(--panel-subtle);display:grid;gap:12px;min-width:0; }
+.developer-investigation h3 {display:flex;align-items:center;gap:8px;color:var(--heading);font-size:15px;}
+.developer-investigation-controls {display:flex;flex-wrap:wrap;align-items:center;gap:9px;}
+.developer-investigation-controls label {font-size:12px;color:var(--muted);font-weight:700;}
+.developer-investigation-controls select {background:var(--field);color:var(--text);border:1px solid var(--stroke-strong);border-radius:7px;padding:8px;max-width:100%;min-width:0;flex:1 1 195px;}
+.developer-investigation-controls button,.developer-incident-report .diagnostics-actions button {display:flex;align-items:center;gap:6px;background:var(--panel);color:var(--text);border:1px solid var(--stroke-strong);border-radius:8px;padding:9px 11px;font-size:12px;max-width:100%;}
+.developer-investigation-controls button:hover,.developer-incident-report .diagnostics-actions button:hover {background:var(--panel-hover);}
+.developer-incident-report {display:grid;gap:11px;border-top:1px solid var(--stroke);padding-top:13px;min-width:0;font-size:12px;line-height:1.5;}
+.developer-incident-topline {display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+.developer-incident-topline strong {color:var(--heading);font-size:13px;}
+.developer-incident-topline span {border:1px solid var(--stroke-strong);padding:3px 7px;border-radius:6px;color:var(--muted);}
+.developer-incident-report h4 {font-size:12px;color:var(--heading);}
+.developer-hypotheses {list-style:decimal;padding-left:24px;display:grid;gap:9px;}
+.developer-hypotheses > li {padding-left:2px;}
+.developer-hypotheses details {border:1px solid var(--stroke);border-radius:9px;background:var(--panel);padding:10px;}
+.developer-hypotheses summary {cursor:pointer;color:var(--heading);display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;}
+.developer-hypotheses summary span {color:var(--muted);font-size:11px;}
+.developer-hypotheses details[open] {display:grid;gap:10px;}
+.developer-hypotheses details p {margin-top:8px;}
+.developer-hypotheses details ol,.developer-hypotheses details ul {padding-left:20px;margin:5px 0 10px;display:grid;gap:5px;}
+@media(max-width:650px){.developer-investigation {padding:11px;}.developer-incident-topline {align-items:flex-start;}.developer-investigation-controls button {width:100%;justify-content:center;}}
+
+/* WU-08 incident panel: accessible, independent section and report folding. */
+.developer-investigation-toggle, .developer-incident-report-toggle {
+  width:100%;display:flex;align-items:center;gap:9px;padding:5px 0;
+  border:0;background:transparent;color:var(--heading);text-align:left;cursor:pointer;
+  font:inherit;
+}
+.developer-investigation-toggle > span:first-of-type,
+.developer-incident-report-toggle > strong {flex:1;min-width:0;}
+.developer-investigation-count {font-size:11px;font-weight:400;color:var(--muted);white-space:nowrap;}
+.developer-investigation-toggle:hover, .developer-incident-report-toggle:hover {color:var(--text);}
+.developer-investigation-toggle:focus-visible, .developer-incident-report-toggle:focus-visible {
+  outline:2px solid var(--accent,var(--text));outline-offset:3px;border-radius:4px;
+}
+.developer-investigation-body,.developer-incident-findings {display:grid;gap:11px;min-width:0;}
+.developer-investigation-body[hidden],.developer-incident-findings[hidden] {display:none;}
+.developer-incident-report-toggle > span {font-size:11px;font-weight:400;white-space:nowrap;}

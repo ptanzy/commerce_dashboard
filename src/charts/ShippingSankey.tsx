@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch } from 'react';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import type { SankeyLink, SankeyNode } from 'd3-sankey';
@@ -7,6 +7,7 @@ import type { Cohort, FlowMeasure } from '../domain/selectors';
 import type { FilterAction, Filters } from '../domain/types';
 import { stateLabel } from '../components/stateNames';
 import { formatInteger, formatPercentage } from '../components/format';
+import { clockNow, recordTiming, recordUserAction, setDiagnosticView } from '../observability/diagnostics';
 
 interface FlowNodeExtra { id: string; state: string; side: 'origin' | 'dest' }
 interface FlowLinkExtra { sellerState: string; customerState: string }
@@ -46,8 +47,17 @@ export function makeFlowLayout(summary: ReturnType<typeof topDirectedFlows>): {n
 export function ShippingSankey({cohort,filters,dispatch}: {cohort:Cohort;filters:Filters;dispatch:Dispatch<FilterAction>}) {
   const [hoveredPair,setHoveredPair] = useState<string | null>(null);
   const [measure,setMeasure] = useState<FlowMeasure>('items');
-  const summary = useMemo(() => topDirectedFlows(cohort,15,measure,filters.focusedFlows), [cohort,measure,filters.focusedFlows]);
-  const layout = useMemo(() => makeFlowLayout(summary), [summary]);
+  const aggregation = useMemo(() => {
+    const start=clockNow();
+    return {value:topDirectedFlows(cohort,15,measure,filters.focusedFlows),ms:clockNow()-start};
+  }, [cohort,measure,filters.focusedFlows]);
+  const summary=aggregation.value;
+  const layoutResult=useMemo(() => {
+    const start=clockNow();return {value:makeFlowLayout(summary),ms:clockNow()-start};
+  }, [summary]);
+  const layout=layoutResult.value;
+  useEffect(()=>recordTiming('sankey_aggregation',aggregation.ms),[aggregation]);
+  useEffect(()=>recordTiming('sankey_layout',layoutResult.ms),[layoutResult]);
   const path = useMemo(() => sankeyLinkHorizontal<FlowNodeExtra,FlowLinkExtra>(), []);
   const focusKeys = useMemo(() => new Set(filters.focusedFlows.map(pair=>flowKey(pair.sellerState,pair.customerState))), [filters.focusedFlows]);
   const displayedKeys = useMemo(() => new Set(summary.links.map(link=>flowKey(link.sellerState,link.customerState))), [summary]);
@@ -58,7 +68,7 @@ export function ShippingSankey({cohort,filters,dispatch}: {cohort:Cohort;filters
   return <div className="viz-body sankey-body">
     <div className="viz-controls"><span className="flow-topline"><strong>{formatWeight(summary.shownWeight,measure)}</strong> shown <span className="flow-summary-sep">/</span> <strong>{formatWeight(summary.mappableWeight,measure)}</strong> eligible mappable</span><span className="viz-meta">Top 15 directed pairs{summary.links.length > 15 ? ` + ${summary.links.length-15} selected` : ''}</span></div>
     <div className="sankey-measure-controls" role="group" aria-label="Sankey measurement">
-      {(Object.keys(MEASURES) as FlowMeasure[]).map(key=><button key={key} type="button" aria-pressed={measure===key} className={measure===key?'is-active':''} onClick={()=>setMeasure(key)}>{MEASURES[key]}</button>)}
+      {(Object.keys(MEASURES) as FlowMeasure[]).map(key=><button key={key} type="button" aria-pressed={measure===key} className={measure===key?'is-active':''} onClick={()=>{recordUserAction('SANKEY_MEASURE_CHANGED','sankey');setDiagnosticView('sankeyMeasure',key);setMeasure(key);}}>{MEASURES[key]}</button>)}
     </div>
     <p className="viz-caption">Rank and size flows by {MEASURES[measure].toLowerCase()}. Click a ribbon to focus one flow, Ctrl/Cmd-click to add or remove flows. Use the selection list below to choose several without modifiers. Hover to preview; the overview stays intact. Relationships represent matching items, not physical delivery routes.</p>
     {filters.focusedFlows.length ? <div className="sankey-focus-details" role="status">

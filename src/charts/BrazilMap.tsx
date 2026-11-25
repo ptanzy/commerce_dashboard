@@ -12,6 +12,8 @@ import type { StateDeliveryStats } from '../domain/selectors';
 import type { FilterAction, Filters } from '../domain/types';
 import { BRAZIL_STATES, stateLabel } from '../components/stateNames';
 import { formatDays, formatInteger, formatPercentage } from '../components/format';
+import { fetchWithTransientRetry, registerRecoveryHandler, retryAndVerifyHealth } from '../observability/recovery';
+import { clockNow, recordEvent, recordUserAction, recordTiming, setHealth, setDiagnosticView } from '../observability/diagnostics';
 
 const UF_CODES = Object.keys(BRAZIL_STATES).sort();
 const topologyUrl = `${import.meta.env.BASE_URL}geo/brazil-states.topojson`;
@@ -64,31 +66,51 @@ export function parseBrazilTopology(input: unknown): FeatureCollection<Geometry>
   return collection;
 }
 
-function useBrazilGeography(): MapStatus {
+function useBrazilGeography(): MapStatus & {retry:()=>void} {
+  const [attempt,setAttempt] = useState(0);
   const [result, setResult] = useState<MapStatus>({status:'loading'});
   useEffect(() => {
     const controller = new AbortController();
-    Promise.resolve().then(() => fetch(topologyUrl, { signal: controller.signal })).then(async (response) => {
+    setResult({status:'loading'});
+    const started=clockNow();
+    setHealth('geography','pending');
+    Promise.resolve().then(() => fetchWithTransientRetry(topologyUrl, controller.signal, fetch, 'map')).then(async (response) => {
       if (!response.ok) throw new Error(`Map asset returned HTTP ${response.status}. Generate it with python scripts/prepare_geo.py.`);
       return parseBrazilTopology(await response.json());
-    }).then(geography => setResult({status:'ready', geography}))
-      .catch(error => {if (!controller.signal.aborted) setResult({status:'error', message: error instanceof Error ? error.message : String(error)});});
+    }).then(geography => {if (!controller.signal.aborted) {
+        setHealth('geography','ready');
+        recordTiming('geography_load',clockNow()-started);
+        recordEvent('info','GEOGRAPHY_LOADED','map',geography.features.length);
+        setResult({status:'ready',geography});
+      }})
+      .catch(error => {if (!controller.signal.aborted) {
+        setHealth('geography','degraded');
+        recordTiming('geography_load',clockNow()-started);
+        recordEvent('error','GEOGRAPHY_LOAD_FAILED','map');
+        setResult({status:'error', message:error instanceof Error ? error.message : 'Map loading failed.'});
+      }});
     return () => controller.abort();
-  }, []);
-  return result;
+  }, [attempt]);
+  return {...result,retry:()=>setAttempt(current=>current+1)};
 }
 
 export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
   const [mode, setMode] = useState<MapMode>('origin');
   const [metric, setMetric] = useState<MapMetric>('orders');
   const geo = useBrazilGeography();
+  useEffect(()=>registerRecoveryHandler('geography','retry',()=>retryAndVerifyHealth('geography',geo.retry)),[geo.retry]);
   // Ignore only the displayed dimension, so users can add another state without its count disappearing.
   // A focused Sankey flow is visual emphasis, not a constraint on this context map.
   const context = useMemo(() => selectCohort(index, {
     ...filters, focusedFlows: [],
     ...(mode === 'origin' ? {sellerStates: []} : {customerStates: []}),
   }), [index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories, mode]);
-  const stats = useMemo(() => stateDeliveryStats(context,mode), [context, mode]);
+  const statsResult=useMemo(()=>{
+    const start=clockNow();
+    return {value:stateDeliveryStats(context,mode),ms:clockNow()-start};
+  },[context,mode]);
+  const stats=statsResult.value;
+  useEffect(()=>recordTiming('map_aggregation',statsResult.ms),[statsResult]);
   const max = useMemo(() => Math.max(0, ...[...stats.values()].map(stat =>
     metric === 'orders' ? stat.distinctOrders : metric === 'onTime' ? (stat.onTimeDenominator >= MIN_SAMPLE ? stat.onTimeRate ?? 0 : 0) : (stat.durationCount >= MIN_SAMPLE ? stat.medianDeliveryDays ?? 0 : 0))), [stats,metric]);
   const rankedVolume = useMemo(() => [...stats.values()]
@@ -119,16 +141,16 @@ export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters
 
   return <div className="viz-body map-body">
     <div className="viz-controls"><div className="pill-switch" role="group" aria-label="Map geography view">
-      <button type="button" aria-pressed={mode === 'origin'} className={mode === 'origin' ? 'is-active' : ''} onClick={() => setMode('origin')}>Seller origins</button>
-      <button type="button" aria-pressed={mode === 'destination'} className={mode === 'destination' ? 'is-active' : ''} onClick={() => setMode('destination')}>Destinations</button>
+      <button type="button" aria-pressed={mode === 'origin'} className={mode === 'origin' ? 'is-active' : ''} onClick={() => {recordUserAction('MAP_VIEW_CHANGED','map');setDiagnosticView('mapMode','origin');setMode('origin');}}>Seller origins</button>
+      <button type="button" aria-pressed={mode === 'destination'} className={mode === 'destination' ? 'is-active' : ''} onClick={() => {recordUserAction('MAP_VIEW_CHANGED','map');setDiagnosticView('mapMode','destination');setMode('destination');}}>Destinations</button>
     </div><span className="viz-meta">27 states · {MAP_METRICS[metric]}</span></div>
     <div className="map-measure-controls" role="group" aria-label="Map measurement">
       {(Object.keys(MAP_METRICS) as MapMetric[]).map(key => <button key={key} type="button" aria-pressed={metric===key}
-        className={metric===key?'is-active':''} onClick={()=>setMetric(key)}>{MAP_METRICS[key]}</button>)}
+        className={metric===key?'is-active':''} onClick={()=>{recordUserAction('MAP_MEASURE_CHANGED','map');setDiagnosticView('mapMeasure',key);setMetric(key);}}>{MAP_METRICS[key]}</button>)}
     </div>
     <p className="viz-caption">{modeExplanation} {metricDescription}</p>
     {geo.status === 'loading' ? <div className="viz-loading" role="status"><RefreshCcw size={16} className="spin-slow" aria-hidden="true"/> Loading verified state boundaries…</div> : null}
-    {geo.status === 'error' ? <div role="alert" className="viz-error"><MapPin size={17} aria-hidden="true"/> {geo.message}</div> : null}
+    {geo.status === 'error' ? <div role="alert" className="viz-error"><MapPin size={17} aria-hidden="true"/> {geo.message} <button type="button" onClick={geo.retry}>Retry loading map</button></div> : null}
     {geo.status === 'ready' ? <div className="map-layout">
       <div className="map-canvas"><svg viewBox="0 0 524 445" role="img" aria-label={`Map of Brazil showing ${modeLabel.toLowerCase()} by ${MAP_METRICS[metric].toLowerCase()}`}>
         <title>Brazil — {modeLabel} · {MAP_METRICS[metric]}</title>

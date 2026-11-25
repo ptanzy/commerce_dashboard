@@ -13,6 +13,7 @@ import type { Filters, ItemFact } from '../../domain/types';
 import { categoryLabel } from '../../domain/selectors';
 import { formatInteger } from '../../components/format';
 import { stateLabel } from '../../components/stateNames';
+import { clockNow, recordTiming, recordUserAction } from '../../observability/diagnostics';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const decimal = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -146,7 +147,11 @@ export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const rows = useMemo(() => selectExplorerOrders(cohort), [cohort]);
+  const rowsResult=useMemo(()=>{
+    const start=clockNow();return {value:selectExplorerOrders(cohort),ms:clockNow()-start};
+  },[cohort]);
+  const rows=rowsResult.value;
+  useEffect(()=>recordTiming('explorer_rows',rowsResult.ms),[rowsResult]);
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q ? rows.filter(row => row.orderId.toLowerCase().includes(q)) : rows;
@@ -157,7 +162,11 @@ export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:
   useEffect(() => {
     if (selectedOrderId && !cohort.eligibleOrderIds.has(selectedOrderId)) setSelectedOrderId(null);
   }, [cohort, selectedOrderId]);
-  const sortedRows = useMemo(() => sortExplorerOrders(filteredRows, sorting), [filteredRows, sorting]);
+  const sortedResult=useMemo(()=>{
+    const start=clockNow();return {value:sortExplorerOrders(filteredRows,sorting),ms:clockNow()-start};
+  },[filteredRows,sorting]);
+  const sortedRows=sortedResult.value;
+  useEffect(()=>recordTiming('explorer_sort',sortedResult.ms),[sortedResult]);
   const pageCount = Math.max(1,Math.ceil(sortedRows.length/PAGE_SIZE));
   const safePage = Math.min(pagination.pageIndex,pageCount-1);
   const pageRows = useMemo(() => sortedRows.slice(safePage*PAGE_SIZE,(safePage+1)*PAGE_SIZE), [sortedRows,safePage]);
@@ -179,11 +188,11 @@ export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:
           <input aria-label="Search order ID" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Find order ID…" type="search" /></label></div>
       <div className="order-table-meta" role="status" aria-live="polite">Showing {formatInteger(filteredRows.length)} of {formatInteger(cohort.eligibleOrders.length)} eligible orders{search.trim() ? ' matching ID search' : ''}</div>
       <div className="order-table-scroll"><table className="order-table"><thead>{table.getHeaderGroups().map(headerGroup=><tr key={headerGroup.id}>{headerGroup.headers.map(header=><th key={header.id} scope="col" aria-sort={header.column.getIsSorted()==='asc'?'ascending':header.column.getIsSorted()==='desc'?'descending':'none'}>
-        {header.isPlaceholder ? null : header.column.getCanSort() ? <button type="button" className="order-sort" onClick={header.column.getToggleSortingHandler()} aria-label={`Sort by ${String(header.column.columnDef.header)}`}>
+        {header.isPlaceholder ? null : header.column.getCanSort() ? <button type="button" className="order-sort" onClick={(event)=>{recordUserAction('ORDER_SORT_CHANGED','orders');header.column.getToggleSortingHandler()?.(event);}} aria-label={`Sort by ${String(header.column.columnDef.header)}`}>
           {flexRender(header.column.columnDef.header,header.getContext())}{header.column.getIsSorted()==='asc'?<ArrowUp size={13}/>:header.column.getIsSorted()==='desc'?<ArrowDown size={13}/>:<ArrowUpDown size={13}/>}</button> : flexRender(header.column.columnDef.header,header.getContext())}
       </th>)}</tr>)}</thead>
       <tbody>{table.getRowModel().rows.length ? table.getRowModel().rows.map(row=><tr key={row.original.orderId}>
-        {row.getVisibleCells().map(cell=><td key={cell.id}>{cell.column.id==='action' ? <button type="button" className="order-view-button" onClick={()=>setSelectedOrderId(row.original.orderId)} aria-label={`View order ${row.original.orderId} details`}>{flexRender(cell.column.columnDef.cell,cell.getContext())}</button> : flexRender(cell.column.columnDef.cell,cell.getContext())}</td>)}
+        {row.getVisibleCells().map(cell=><td key={cell.id}>{cell.column.id==='action' ? <button type="button" className="order-view-button" onClick={()=>{recordUserAction('ORDER_DETAILS_OPENED','orders');setSelectedOrderId(row.original.orderId);}} aria-label={`View order ${row.original.orderId} details`}>{flexRender(cell.column.columnDef.cell,cell.getContext())}</button> : flexRender(cell.column.columnDef.cell,cell.getContext())}</td>)}
       </tr>) : <tr><td colSpan={columns.length}><div className="order-no-results"><FileSearch size={20}/><span>{search.trim() ? 'No order IDs match this search in the selected cohort.' : 'No orders match the current dashboard filters.'}</span></div></td></tr>}</tbody></table></div>
       <div className="order-pagination"><span>{filteredRows.length ? `Rows ${formatInteger(safePage*PAGE_SIZE+1)}–${formatInteger(Math.min((safePage+1)*PAGE_SIZE,filteredRows.length))} of ${formatInteger(filteredRows.length)}` : 'No rows'} · 25 per page</span>
         <div className="page-controls"><button type="button" aria-label="Previous orders page" disabled={!table.getCanPreviousPage()} onClick={()=>table.previousPage()}><ChevronLeft size={18}/></button><span>Page {currentPage} of {pageCount}</span><button type="button" aria-label="Next orders page" disabled={!table.getCanNextPage()} onClick={()=>table.nextPage()}><ChevronRight size={18}/></button></div>

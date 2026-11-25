@@ -1,0 +1,39 @@
+Commerce Dashboard — WU-08 React Test Fixes (2026-11-24)
+
+Intended baseline:
+  WU-08 applied through the Collapsible Investigations patch.
+
+Included files:
+  tests/ui/wu08_investigation.test.tsx
+  tests/ui/charts.test.tsx
+
+Fix 1: tests/ui/wu08_investigation.test.tsx
+  The investigation renders several hypotheses, each with "Suggested troubleshooting",
+  "Confirm:", and "Weaken:" content. A getByText query scoped to the entire
+  investigation raised a multiple-match exception. The assertions now inspect
+  only the "Visualization data or layout edge case" hypothesis's <details>.
+
+Fix 2: tests/ui/charts.test.tsx
+  The full-dashboard map interaction test exceeded Vitest's 5-second test timeout
+  under suite load. Its own timeout is now 15 seconds, without changing other tests.
+  If it still times out, investigate actual performance; do not keep increasing it.
+  This file retains the WU-07 focused-flow summary assertions.
+
+Apply:
+  1. Extract this ZIP into C:\Users\ptanz\job_search\commerce_dashboard
+  2. Preserve the tests/ui/ subfolders and replace both files.
+
+Verify in PowerShell:
+  cd C:\Users\ptanz\job_search\commerce_dashboard
+  npm run typecheck
+  npx vitest run tests/ui/wu08_investigation.test.tsx tests/ui/charts.test.tsx
+  npm test
+  npm run test:node
+  npm run build
+
+Notes:
+  - No production/application code is included.
+  - These are corrections to test matching and timing, not a resolution of an
+    underlying slow render should one exist.
+  - Full Vitest execution is not available in the patch packaging environment;
+    run the commands above in the existing Windows checkout.

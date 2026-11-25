@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import type { Dispatch } from 'react';
 import {
   ArrowDownRight, ArrowUpRight, BarChart3, CircleAlert, Database,
@@ -22,6 +22,11 @@ import { ShippingSankey } from '../charts/ShippingSankey';
 import { OrderExplorer } from '../features/orders/OrderExplorer';
 import { SavedViews } from '../components/SavedViews';
 import { CategoryLeaderboard, DelayDistributionChart, PeriodComparisonPanel, CsvExportButton } from '../components/AdvancedExploration';
+import { DiagnosticsPanel } from '../components/DiagnosticsPanel';
+import { UiErrorBoundary } from '../observability/UiErrorBoundary';
+import { registerRecoveryHandler, retryAndVerifyHealth } from '../observability/recovery';
+import { clockNow, recordTiming, recordUserAction, setBuildInfo, setRuntimeEnvironment, updateDashboardState } from '../observability/diagnostics';
+import type { UserActionCode } from '../observability/diagnostics';
 
 function Header({theme, onToggle}: {theme: DashboardTheme;onToggle:()=>void}) {
   return <header className="topbar">
@@ -31,9 +36,10 @@ function Header({theme, onToggle}: {theme: DashboardTheme;onToggle:()=>void}) {
         <span className="brand-wordmark"><strong>commerce<span className="brand-dot">.</span></strong><small>DELIVERY INTELLIGENCE</small></span>
       </a>
       <div className="topbar-actions">
+        <DiagnosticsPanel/>
         <span className="edition-label"><span className="edition-dot" /> HISTORICAL DATA · OLIST</span>
         <span className="topbar-separator" aria-hidden="true" />
-        <button type="button" className="theme-toggle" onClick={onToggle} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} aria-pressed={theme === 'light'}>
+        <button type="button" className="theme-toggle" onClick={()=>{recordUserAction('THEME_CHANGED','app');onToggle();}} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} aria-pressed={theme === 'light'}>
           {theme === 'dark' ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
           <span className="hidden xs:inline">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
         </button>
@@ -75,16 +81,16 @@ function ChartsSection({dataset, cohort, filters, dispatch}: {dataset: Dashboard
     <div className="chart-grid">
       <section className="viz-card" aria-labelledby="map-heading">
         <div className="viz-heading"><span className="future-icon"><MapPinned size={19} aria-hidden="true" /></span><div><h3 id="map-heading">Geographic distribution</h3><p>Seller origins & customer destinations</p></div></div>
-        <BrazilMap index={dataset.index} filters={filters} dispatch={dispatch}/>
+        <UiErrorBoundary area="map"><BrazilMap index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
       </section>
       <section className="viz-card" aria-labelledby="trend-heading">
         <div className="viz-heading"><span className="future-icon"><BarChart3 size={19} aria-hidden="true" /></span><div><h3 id="trend-heading">Delivery trends</h3><p>Historical order volume and punctuality</p></div></div>
-        <DeliveryTrends index={dataset.index} filters={filters} dispatch={dispatch}/>
+        <UiErrorBoundary area="trends"><DeliveryTrends index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
       </section>
     </div>
     <section className="viz-card viz-sankey" aria-labelledby="flow-heading">
       <div className="viz-heading"><span className="future-icon"><GitBranch size={19} aria-hidden="true" /></span><div><h3 id="flow-heading">Where orders originate—and where they go</h3><p>Top 15 seller-to-customer state relationships</p></div></div>
-      <ShippingSankey cohort={cohort} filters={filters} dispatch={dispatch}/>
+      <UiErrorBoundary area="sankey"><ShippingSankey cohort={cohort} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
     </section>
   </section>;
 }
@@ -97,11 +103,55 @@ function DataFootnote({ dataset }: {dataset: DashboardDataset}) {
   </aside>;
 }
 
+function filterActionCode(action:FilterAction):UserActionCode {
+  switch(action.type) {
+    case 'toggle_value':return action.dimension==='sellerStates'?'ORIGIN_SELECTION_CHANGED':
+      action.dimension==='customerStates'?'DESTINATION_SELECTION_CHANGED':'CATEGORY_SELECTION_CHANGED';
+    case 'clear_dimension':return 'FILTER_GROUP_CLEARED';
+    case 'set_date_range':return 'DATE_RANGE_CHANGED';
+    case 'focus_flow':return 'FLOW_FOCUSED';
+    case 'toggle_flow_focus':return 'FLOW_SELECTION_CHANGED';
+    case 'clear_flow_focus':return 'FLOW_FOCUS_CLEARED';
+    case 'restore_filters':return 'SAVED_VIEW_RESTORED';
+    case 'clear_all':return 'FILTERS_RESET';
+  }
+}
+
 export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
-  const [filters, dispatch] = useReducer(filterReducer, { ...DEFAULT_FILTERS });
-  const contextCohort = useMemo(() => selectCohort(dataset.index, filters), [dataset.index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories]);
-  const cohort = useMemo(() => selectFocusedFlowCohort(contextCohort, filters.focusedFlows), [contextCohort, filters.focusedFlows]);
-  const metrics = useMemo(() => computeMetrics(cohort), [cohort]);
+  const [filters, baseDispatch] = useReducer(filterReducer, { ...DEFAULT_FILTERS });
+  // Log only discrete user-initiated actions, not React render/effect cycles or raw filter values.
+  const dispatch=useCallback<Dispatch<FilterAction>>((action)=>{
+    recordUserAction(filterActionCode(action),action.type.includes('flow')?'sankey':'dashboard');
+    baseDispatch(action);
+  },[baseDispatch]);
+  // Measure pure computations without notifying diagnostics subscribers during React render.
+  const globalResult = useMemo(() => {
+    const start = clockNow();
+    const value = selectCohort(dataset.index,filters);
+    return {value, ms:clockNow()-start};
+  }, [dataset.index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories]);
+  const contextCohort = globalResult.value;
+  const focusResult = useMemo(() => {
+    const start = clockNow();
+    const value = selectFocusedFlowCohort(contextCohort,filters.focusedFlows);
+    return {value, ms:clockNow()-start};
+  }, [contextCohort,filters.focusedFlows]);
+  const cohort = focusResult.value;
+  const metricResult = useMemo(() => {
+    const start = clockNow();
+    const value = computeMetrics(cohort);
+    return {value, ms:clockNow()-start};
+  }, [cohort]);
+  const metrics = metricResult.value;
+  useEffect(() => recordTiming('cohort_filter',globalResult.ms),[globalResult]);
+  useEffect(() => recordTiming('flow_focus',focusResult.ms),[focusResult]);
+  useEffect(() => recordTiming('kpi_calculation',metricResult.ms),[metricResult]);
+  // Report only aggregate counts after React commits; no filter values or order identifiers.
+  useEffect(() => updateDashboardState({origins:filters.sellerStates.length,
+    destinations:filters.customerStates.length,categories:filters.categories.length,
+    focusedFlows:filters.focusedFlows.length,
+    dateFiltered:filters.purchaseDateFrom!==null||filters.purchaseDateTo!==null,
+    eligibleOrders:metrics.distinctOrders}),[filters,metrics.distinctOrders]);
   const options = useMemo(() => deriveFilterOptions(dataset), [dataset]);
 
   return <>
@@ -110,14 +160,14 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
     {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
     {filters.focusedFlows.length ? <div className="flow-focus-banner" role="status"><strong>{filters.focusedFlows.length} focused {filters.focusedFlows.length===1?'flow':'flows'}</strong><span>KPIs, trends, and order explorer include any selected directed pair, but count each matching order once. Sankey and map retain context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
     <KpiCards metrics={metrics} cohort={cohort} />
-    <PeriodComparisonPanel index={dataset.index} filters={filters} metrics={metrics} />
+    <UiErrorBoundary area="analytics"><PeriodComparisonPanel index={dataset.index} filters={filters} metrics={metrics} /></UiErrorBoundary>
     <ChartsSection dataset={dataset} cohort={contextCohort} filters={filters} dispatch={dispatch} />
     <section className="upcoming-section advanced-section" aria-labelledby="advanced-heading">
       <div className="section-headline"><div><div className="section-eyebrow">03 / DEEPER DELIVERY INTELLIGENCE</div><h2 id="advanced-heading" className="content-heading">Explore the details</h2></div><span className="workunit-label">Category mix · Calendar-day delays</span></div>
       <div className="advanced-grid"><CategoryLeaderboard cohort={cohort}/><DelayDistributionChart cohort={cohort}/></div>
     </section>
     <CsvExportButton cohort={cohort}/>
-    <OrderExplorer index={dataset.index} cohort={cohort} filters={filters} />
+    <UiErrorBoundary area="orders"><OrderExplorer index={dataset.index} cohort={cohort} filters={filters} /></UiErrorBoundary>
     <DataFootnote dataset={dataset} />
   </>;
 }
@@ -140,6 +190,23 @@ function ErrorDashboard({message,retry}: {message:string;retry:()=>void}) {
 export function App() {
   const {theme, toggleTheme} = useTheme();
   const data = useDashboardData();
+  useEffect(()=>registerRecoveryHandler('dataset','retry',()=>retryAndVerifyHealth('dataset',data.retry)),[data.retry]);
+  useEffect(()=>{
+    // Only broad platform families are retained; never log navigator.userAgent itself.
+    const ua=typeof navigator==='undefined'?'':navigator.userAgent;
+    const browser=/Edg\//.test(ua)?'Edge':/Firefox\//.test(ua)?'Firefox':
+      /Chrome\//.test(ua)?'Chrome':/Safari\//.test(ua)?'Safari':'Other';
+    const os=/Android/.test(ua)?'Android':/iPhone|iPad|iPod/.test(ua)?'iOS':
+      /Windows/.test(ua)?'Windows':/Macintosh|Mac OS/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'Other';
+    setRuntimeEnvironment({browser,os});
+  },[]);
+  useEffect(()=>setBuildInfo({
+    version: import.meta.env.VITE_APP_VERSION || '0.6.0',
+    commit: import.meta.env.VITE_APP_GIT_COMMIT || 'unavailable',
+    builtAt: import.meta.env.VITE_APP_BUILD_TIME || 'unavailable',
+    mode: ['development','production','test'].includes(import.meta.env.MODE)
+      ? import.meta.env.MODE as 'development' | 'production' | 'test' : 'unknown',
+  }),[]);
   const manifestInfo = data.status === 'ready'
     ? `${data.dataset.manifest.sampleMode ? 'SAMPLE' : 'VERIFIED'} · ${data.dataset.manifest.purchaseDateMin?.slice(0,4) ?? '–'}–${data.dataset.manifest.purchaseDateMax?.slice(0,4) ?? '–'}`
     : 'LOCAL OLIST DATA';

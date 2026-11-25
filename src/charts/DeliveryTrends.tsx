@@ -1,18 +1,29 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch } from 'react';
 import { scaleBand, scaleLinear } from 'd3-scale';
 import type { DataIndex } from '../data/indexes';
 import type { FilterAction, Filters } from '../domain/types';
 import { monthDateRange, monthlyTrendContext } from '../domain/selectors';
 import { formatInteger, formatPercentage } from '../components/format';
+import { clockNow, recordTiming, recordUserAction, setDiagnosticView } from '../observability/diagnostics';
 
 type TrendMeasure = 'orders' | 'onTime';
 const W = 860, H = 294, L = 62, R = 18, T = 22, B = 51;
 
 export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
   const [measure, setMeasure] = useState<TrendMeasure>('orders');
-  const months = useMemo(() => monthlyTrendContext(index,filters), [index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.customerStates,filters.sellerStates,filters.categories]);
-  const focusedMonths = useMemo(() => filters.focusedFlows.length ? monthlyTrendContext(index,filters,30,filters.focusedFlows) : null, [index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.sellerStates,filters.customerStates,filters.categories,filters.focusedFlows]);
+  const contextResult=useMemo(()=>{
+    const start=clockNow();return {value:monthlyTrendContext(index,filters),ms:clockNow()-start};
+  },[index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.customerStates,filters.sellerStates,filters.categories]);
+  const months=contextResult.value;
+  const focusedResult=useMemo(()=>{
+    if(!filters.focusedFlows.length)return null;
+    const start=clockNow();
+    return {value:monthlyTrendContext(index,filters,30,filters.focusedFlows),ms:clockNow()-start};
+  },[index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.sellerStates,filters.customerStates,filters.categories,filters.focusedFlows]);
+  const focusedMonths=focusedResult?.value??null;
+  useEffect(()=>recordTiming('trend_context',contextResult.ms),[contextResult]);
+  useEffect(()=>{if(focusedResult)recordTiming('trend_focus',focusedResult.ms);},[focusedResult]);
   const x = useMemo(() => scaleBand<string>().domain(months.map(m => m.month)).range([L, W-R]).paddingInner(.20).paddingOuter(.08), [months]);
   const maxOrders = Math.max(1,...months.map(m => m.distinctOrders));
   const y = scaleLinear().domain([0, measure === 'orders' ? maxOrders * 1.08 : 1]).nice(measure === 'orders' ? 5 : 4).range([H-B,T]);
@@ -22,8 +33,8 @@ export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; fi
 
   return <div className="viz-body trend-body">
     <div className="viz-controls"><div className="pill-switch" role="group" aria-label="Monthly trend metric">
-      <button type="button" aria-pressed={measure === 'orders'} className={measure === 'orders' ? 'is-active' : ''} onClick={() => setMeasure('orders')}>Order volume</button>
-      <button type="button" aria-pressed={measure === 'onTime'} className={measure === 'onTime' ? 'is-active' : ''} onClick={() => setMeasure('onTime')}>On-time rate</button>
+      <button type="button" aria-pressed={measure === 'orders'} className={measure === 'orders' ? 'is-active' : ''} onClick={() => {recordUserAction('TREND_MEASURE_CHANGED','trends');setDiagnosticView('trendMeasure','orders');setMeasure('orders');}}>Order volume</button>
+      <button type="button" aria-pressed={measure === 'onTime'} className={measure === 'onTime' ? 'is-active' : ''} onClick={() => {recordUserAction('TREND_MEASURE_CHANGED','trends');setDiagnosticView('trendMeasure','onTime');setMeasure('onTime');}}>On-time rate</button>
     </div><span className="viz-meta">{months.length} historical months</span></div>
     <p className="viz-caption">The full timeline remains visible. Global filters set the context; when a flow is focused, brighter bars show its monthly orders or on-time rate. Highlighted dates filter the dashboard.</p>
     {months.length === 0 ? <div className="viz-empty" role="status">No valid historical purchase dates are available.</div> : <>

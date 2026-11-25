@@ -16,7 +16,10 @@
     "src/app/filterReducer.ts",
     "src/domain/exploration.ts",
     "src/domain/exportCsv.ts",
-    "src/domain/savedViews.ts"
+    "src/domain/savedViews.ts",
+    "src/observability/diagnostics.ts",
+    "src/observability/recovery.ts",
+    "src/observability/investigation.ts"
   ],
   "exclude": [
     "node_modules",

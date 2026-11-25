@@ -8,6 +8,9 @@ The output is intentionally ONLY state boundaries and names, no old census data.
 """
 from __future__ import annotations
 
+from time import perf_counter
+from ops_logging import emit_pipeline_event
+
 import argparse
 from collections import Counter
 import math
@@ -222,19 +225,27 @@ def main() -> None:
     parser.add_argument("--source", type=Path, help="Local composite GeoJSON file (no network required)")
     parser.add_argument("--output", type=Path, default=Path("public/geo/brazil-states.topojson"))
     args = parser.parse_args()
-    if args.source:
-        data = args.source.read_bytes()
-    else:
-        with urlopen(SOURCE_URL, timeout=45) as response:
-            data = response.read()
-    source_sha = hashlib.sha256(data).hexdigest()
-    diagnostics: dict[str, int] = {}
-    result = convert_geojson(json.loads(data), diagnostics=diagnostics)
-    summary = validate_topology(result)
-    args.output.parent.mkdir(parents=True,exist_ok=True)
-    blob = (json.dumps(result,ensure_ascii=False,separators=(',',':'))+"\n").encode("utf-8")
-    args.output.write_bytes(blob)
-    print(json.dumps({"sourceURL":SOURCE_URL,"sourceSha256":source_sha,"output":str(args.output),"outputSha256":hashlib.sha256(blob).hexdigest(),**summary,**diagnostics},indent=2))
+    started = perf_counter()
+    emit_pipeline_event("geography", "info", "PIPELINE_STARTED")
+    try:
+        if args.source:
+            data = args.source.read_bytes()
+        else:
+            with urlopen(SOURCE_URL, timeout=45) as response:
+                data = response.read()
+        source_sha = hashlib.sha256(data).hexdigest()
+        diagnostics: dict[str, int] = {}
+        result = convert_geojson(json.loads(data), diagnostics=diagnostics)
+        summary = validate_topology(result)
+        args.output.parent.mkdir(parents=True,exist_ok=True)
+        blob = (json.dumps(result,ensure_ascii=False,separators=(',',':'))+"\n").encode("utf-8")
+        args.output.write_bytes(blob)
+        print(json.dumps({"sourceURL":SOURCE_URL,"sourceSha256":source_sha,"output":str(args.output),"outputSha256":hashlib.sha256(blob).hexdigest(),**summary,**diagnostics},indent=2))
+    except Exception:
+        emit_pipeline_event("geography", "error", "PIPELINE_FAILED", (perf_counter() - started) * 1000)
+        raise
+    emit_pipeline_event("geography", "info", "PIPELINE_COMPLETED",
+                        (perf_counter() - started) * 1000, summary["states"])
 
 
 if __name__ == '__main__':
