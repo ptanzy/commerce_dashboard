@@ -8,9 +8,15 @@ const FIELDS=[
 /** No names, customer IDs or seller IDs exported. A missing amount stays blank, not zero. */
 function cell(input: string | number | null):string {
   if(input===null)return '';
-  let value=String(input);
-  // Prevent spreadsheet formula interpretation, including after leading whitespace.
-  if(typeof input==='string' && /^[\s\uFEFF]*[=+\-@]/.test(value))value="'"+value;
+  // Normalize embedded control / bidi marks so a malicious identifier cannot
+  // visually obscure an active spreadsheet formula or forge extra CSV rows.
+  let value=typeof input==='string'
+    ? input.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u2069]/g,' ')
+    : String(input);
+  // Spreadsheet software may treat strings beginning with = + - @ as formulas,
+  // including when preceded by whitespace or an invisible BOM. Numeric values
+  // aren't treated as untrusted formula strings.
+  if(typeof input==='string' && /^[\s\uFEFF]*[=+\-@]/u.test(value))value="'"+value;
   return '"'+value.replaceAll('"','""')+'"';
 }
 export function exportCohortCsv(cohort:Cohort):string {

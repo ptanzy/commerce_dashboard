@@ -6,8 +6,9 @@ import { SAVED_VIEWS_KEY, SAVED_VIEWS_LIMIT, readSavedViews, readFilterSnapshot 
 import type { SavedView } from '../domain/savedViews';
 import { recordEvent, recordUserAction, setHealth } from '../observability/diagnostics';
 
+const MAX_SAVED_VIEWS_STORAGE_CHARS = 512_000;
 function initial(): SavedView[] {
-  try{return readSavedViews(JSON.parse(window.localStorage.getItem(SAVED_VIEWS_KEY)??'[]'));}
+  try{const raw=window.localStorage.getItem(SAVED_VIEWS_KEY)??'[]';return raw.length<=MAX_SAVED_VIEWS_STORAGE_CHARS?readSavedViews(JSON.parse(raw)):[];}
   catch{return [];}
 }
 /** Explicit browser-only presets; never send saved data to a server. */
@@ -16,7 +17,7 @@ export function SavedViews({filters,dispatch}: {filters:Filters;dispatch:Dispatc
   useEffect(()=>{
     try {
       const current=window.localStorage.getItem(SAVED_VIEWS_KEY);
-      if (current !== null) JSON.parse(current);
+      if (current !== null) {if(current.length>MAX_SAVED_VIEWS_STORAGE_CHARS)throw new Error('Oversized saved-view data');JSON.parse(current);}
       setHealth('browser_storage','ready');
     } catch {
       setHealth('browser_storage','degraded');
@@ -37,7 +38,7 @@ export function SavedViews({filters,dispatch}: {filters:Filters;dispatch:Dispatc
   }
   function validatedName():string|null{
     const cleaned=name.trim();
-    if(!cleaned||cleaned.length>60){setNotice('Enter a name of 1–60 characters.');return null;}
+    if(!cleaned||cleaned.length>60||/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/.test(cleaned)){setNotice('Enter a name of 1–60 printable characters.');return null;}
     return cleaned;
   }
   function save(){

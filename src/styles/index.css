@@ -626,3 +626,12 @@ h1,h2,h3 { font-family:'Segoe UI',Arial,system-ui,sans-serif; }
 .developer-investigation-body,.developer-incident-findings {display:grid;gap:11px;min-width:0;}
 .developer-investigation-body[hidden],.developer-incident-findings[hidden] {display:none;}
 .developer-incident-report-toggle > span {font-size:11px;font-weight:400;white-space:nowrap;}
+
+/* WU-09: SVG paths that act as focusable ribbon hit targets can otherwise
+   acquire a large browser-default rectangular focus outline on mouse click.
+   Keep that box hidden, but show a clear ribbon-shaped keyboard focus cue. */
+.sankey-ribbon-hit {outline:none;}
+.sankey-ribbon-hit:focus-visible {
+  stroke:var(--chart-select);
+  stroke-opacity:.55;
+}

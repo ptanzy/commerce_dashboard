@@ -91,13 +91,12 @@ export function ShippingSankey({cohort,filters,dispatch}: {cohort:Cohort;filters
             const selected = focusKeys.has(key);
             const dim = emphasized !== null && !emphasized.has(key);
             const d = path(link) ?? '';
+            // Paint ribbons underneath nodes, then add hit targets after nodes below.
+            // The accessible hit targets own all pointer and keyboard interaction.
             return <path key={`${link.sellerState}-${link.customerState}-${i}`} d={d} fill="none"
+              aria-hidden="true" pointerEvents="none"
               className={`sankey-ribbon${selected ? ' sankey-ribbon-active' : ''}${dim ? ' sankey-ribbon-dim' : ''}`}
-              strokeWidth={Math.max(1, link.width ?? 1)}
-              onMouseEnter={()=>setHoveredPair(key)} onMouseLeave={()=>setHoveredPair(null)}
-              onClick={event=>selectPair(link.sellerState,link.customerState,event.ctrlKey||event.metaKey)}>
-              <title>{stateLabel(link.sellerState)} → {stateLabel(link.customerState)}: {formatWeight(link.value,measure)}. Click to focus; Ctrl/Cmd-click to toggle additional focus.</title>
-            </path>;
+              strokeWidth={Math.max(1, link.width ?? 1)} />;
           })}
           {layout.nodes.map(node => {
             const left = node.side === 'origin';
@@ -113,6 +112,30 @@ export function ShippingSankey({cohort,filters,dispatch}: {cohort:Cohort;filters
               <text className="sankey-node-label" x={left ? x0-7 : x1+7} y={(y0+y1)/2+3.5} textAnchor={left?'end':'start'}>{node.state} · {formatInteger(count)}</text>
               <title>{left?'Seller origin':'Customer destination'}: {stateLabel(node.state)} — {formatWeight(count,measure)} of matching items</title>
             </g>;
+          })}
+          {/* Transparent hit targets are drawn ABOVE the node labels/rectangles, so
+              ribbons remain clickable at their endpoints and when very narrow. */}
+          {layout.links.map((link,i)=>{
+            const key=flowKey(link.sellerState,link.customerState);
+            const selected=focusKeys.has(key);
+            const choose=(additive:boolean)=>selectPair(link.sellerState,link.customerState,additive);
+            return <path key={`hit-${link.sellerState}-${link.customerState}-${i}`}
+              d={path(link) ?? ''} fill="none" stroke="transparent"
+                className="sankey-ribbon-hit"
+              strokeWidth={Math.max(12,link.width ?? 1)} pointerEvents="stroke"
+              role="button" tabIndex={0} aria-label={`Sankey flow ${key}`}
+              aria-pressed={selected} style={{cursor:'pointer',outline:'none'}}
+              onMouseEnter={()=>setHoveredPair(key)} onMouseLeave={()=>setHoveredPair(null)}
+              onFocus={()=>setHoveredPair(key)} onBlur={()=>setHoveredPair(null)}
+              onClick={event=>choose(event.ctrlKey||event.metaKey)}
+              onKeyDown={event=>{
+                if(event.key==='Enter'||event.key===' '){
+                  event.preventDefault();
+                  choose(event.ctrlKey||event.metaKey);
+                }
+              }}>
+              <title>{stateLabel(link.sellerState)} → {stateLabel(link.customerState)}: {formatWeight(link.value,measure)}. Click to focus; Ctrl/Cmd-click to add/remove focus.</title>
+            </path>;
           })}
         </svg>
       </div>

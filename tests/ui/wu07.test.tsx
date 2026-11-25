@@ -35,6 +35,38 @@ describe('WU-07 advanced exploration',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Clear flow focus'}));
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('3');
   });
+  it('supports Ctrl/Cmd-click on actual Sankey ribbons and plain click replacement',()=>{
+    render(<DashboardContent dataset={dataset}/>);
+    const first=screen.getByRole('button',{name:'Sankey flow SP→MG'});
+    const second=screen.getByRole('button',{name:'Sankey flow RJ→SP'});
+    expect(first).toHaveAttribute('aria-pressed','false');
+    expect(second).toHaveAttribute('aria-pressed','false');
+    // Focusable SVG hit targets must not draw a rectangular browser outline.
+    // Keyboard focus remains visible through the ribbon-shaped :focus-visible stroke.
+    expect(first).toHaveClass('sankey-ribbon-hit');
+    expect(first).toHaveStyle({outline:'none'});
+    expect(first).toHaveAttribute('tabindex','0');
+    fireEvent.click(first);
+    expect(first).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('1');
+    fireEvent.click(second,{ctrlKey:true});
+    expect(first).toHaveAttribute('aria-pressed','true');
+    expect(second).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByRole('button',{name:'Clear 2 focused flows filter'})).toBeInTheDocument();
+    expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('2');
+    fireEvent.click(second,{ctrlKey:true});
+    expect(second).toHaveAttribute('aria-pressed','false');
+    expect(first).toHaveAttribute('aria-pressed','true');
+    fireEvent.click(second,{metaKey:true});
+    expect(second).toHaveAttribute('aria-pressed','true');
+    fireEvent.click(second);
+    expect(first).toHaveAttribute('aria-pressed','false');
+    expect(second).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('1');
+    fireEvent.keyDown(first,{key:'Enter',ctrlKey:true});
+    expect(first).toHaveAttribute('aria-pressed','true');
+    expect(second).toHaveAttribute('aria-pressed','true');
+  });
   it('offers category measurement modes and delivery timing without changing the KPI cohort',()=>{
     render(<DashboardContent dataset={dataset}/>);
     const ranking=screen.getByRole('region',{name:'Product category leaderboard'});

@@ -19,7 +19,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    environmentMatchGlobs: [['tests/ui/**', 'jsdom']],
     exclude: ['**/node_modules/**', '**/dist/**', '**/dist-test/**', '**/*.node.cjs'],
   },
 });

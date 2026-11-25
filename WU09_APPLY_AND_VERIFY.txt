@@ -1,0 +1,21 @@
+WU-09 SECURITY & ADVERSARIAL TESTING PATCH
+==========================================
+Baseline: feature/dashboard-poc WU-08 commit 4cc822407df9936e08cb792d68b900ccea536269
+
+1. Verify your checkout is on feature/dashboard-poc and WU-08 is clean/committed.
+2. Extract ZIP into C:\Users\ptanz\job_search\commerce_dashboard, preserving relative paths.
+3. Inspect `git diff` before tests. No datasets, public/data, node_modules, or credentials belong in commit.
+4. From PowerShell in the repo root:
+     npm run typecheck
+     npm test
+     npm run test:node
+     npm run test:security
+     python -m unittest discover -s tests -p 'test_*.py' -v
+     npm run security:static
+     npm run build
+     npm audit --omit=dev
+     npm audit
+5. Review docs/WU09_SECURITY_HANDOFF.md for the manual browser checks and audit gate.
+6. DO NOT commit until local tests, audit review, and browser acceptance have been reviewed.
+
+No dependency versions were upgraded. No app server, remote telemetry, or datasets are in this patch.

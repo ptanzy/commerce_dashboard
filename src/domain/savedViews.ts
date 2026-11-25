@@ -5,7 +5,7 @@ export const SAVED_VIEWS_LIMIT=12;
 export interface SavedView { id:string; name:string; filters:Filters }
 const isRecord=(value:unknown):value is Record<string,unknown>=>typeof value==='object'&&value!==null&&!Array.isArray(value);
 const code=(s:unknown):s is string=>typeof s==='string'&&/^[A-Z]{2}$/.test(s);
-const category=(s:unknown):s is string=>typeof s==='string'&&s.length>0&&s.length<=160;
+const category=(s:unknown):s is string=>typeof s==='string'&&s.length>0&&s.length<=160&&!/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/.test(s);
 const date=(s:unknown):s is string|null=>{
   if(s===null)return true;
   if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;
@@ -40,7 +40,7 @@ export function readSavedViews(input:unknown):SavedView[]{
   const ids=new Set<string>();
   for(const entry of input.slice(0,SAVED_VIEWS_LIMIT)){
     if(!isRecord(entry)||typeof entry.id!=='string'||entry.id.length>100||!entry.id.trim()||
-      typeof entry.name!=='string'||!entry.name.trim()||entry.name.length>60||ids.has(entry.id))continue;
+      typeof entry.name!=='string'||!entry.name.trim()||entry.name.length>60||/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/.test(entry.name)||ids.has(entry.id))continue;
     const filters=readFilterSnapshot(entry.filters);
     if(!filters)continue;
     ids.add(entry.id);rows.push({id:entry.id,name:entry.name.trim(),filters});

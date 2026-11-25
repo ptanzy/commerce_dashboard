@@ -21,7 +21,8 @@ import math
 from pathlib import Path
 import tempfile
 from typing import Iterator
-from zipfile import ZipFile
+from zipfile import ZipFile, ZIP_STORED, ZIP_DEFLATED
+from stat import S_IFMT, S_IFLNK
 
 from date_math import (
     category_key, classify_order, is_uf, normalized_timestamp,
@@ -39,6 +40,41 @@ INPUTS = {
 PROCESSING_VERSION = "wu01-duckdb-1"
 STATES = set("AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split())
 
+# WU-09: bounded ingestion protects the local ETL from malicious/broken archives.
+# Thresholds comfortably exceed the verified six-file Olist CSV inventory.
+MAX_SOURCE_CSV_BYTES = 128 * 1024 * 1024
+MAX_TOTAL_REQUIRED_CSV_BYTES = 384 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 10_000
+MAX_COMPRESSION_RATIO = 200
+
+
+def safe_zip_entry(info) -> None:
+    """Validate only the six selected CSV entries; never extract archive paths."""
+    if info.flag_bits & 1:
+        raise ValueError("Encrypted CSV entries are not supported")
+    if info.compress_type not in (ZIP_STORED, ZIP_DEFLATED):
+        raise ValueError("Unsupported CSV compression method")
+    if info.create_system == 3 and S_IFMT(info.external_attr >> 16) == S_IFLNK:
+        raise ValueError("Symlink ZIP members are not accepted")
+    if info.file_size < 0 or info.compress_size < 0:
+        raise ValueError("Invalid CSV archive member size")
+    if info.file_size > MAX_SOURCE_CSV_BYTES:
+        raise ValueError("A required CSV exceeds the allowed size")
+    if info.file_size > 0 and info.file_size / max(1, info.compress_size) > MAX_COMPRESSION_RATIO:
+        raise ValueError("A required CSV exceeds the allowed compression ratio")
+
+
+def copy_csv_bounded(inp, out) -> int:
+    """Enforce the byte cap on *actual decompressed data*, not ZIP metadata alone."""
+    total = 0
+    while chunk := inp.read(1 << 20):
+        total += len(chunk)
+        if total > MAX_SOURCE_CSV_BYTES:
+            raise ValueError("Decompressed CSV exceeds the allowed size")
+        out.write(chunk)
+    return total
+
 
 def digest(path: Path) -> str:
     h = hashlib.sha256()
@@ -53,24 +89,41 @@ def input_paths(source: Path) -> Iterator[tuple[dict[str, Path], str | None]]:
     """Extract only required CSVs from ZIP to a temporary directory, or use a directory."""
     if source.is_dir():
         paths = {name: source / filename for name, (filename, _) in INPUTS.items()}
+        total_bytes = 0
         for name, path in paths.items():
-            if not path.is_file():
-                raise ValueError(f"Missing required {name} CSV at {path}")
+            if not path.is_file() or path.is_symlink():
+                raise ValueError(f"Missing or unsafe required {name} CSV")
+            size = path.stat().st_size
+            if size > MAX_SOURCE_CSV_BYTES:
+                raise ValueError("A required CSV exceeds the allowed size")
+            total_bytes += size
+            if total_bytes > MAX_TOTAL_REQUIRED_CSV_BYTES:
+                raise ValueError("Required CSVs exceed the allowed total size")
         yield paths, None
         return
     if not source.is_file() or not source.suffix.lower() == ".zip":
         raise ValueError(f"Supply a ZIP archive or extracted CSV directory: {source}")
+    if source.stat().st_size > MAX_ARCHIVE_BYTES:
+        raise ValueError("Source ZIP exceeds the allowed archive size")
     with tempfile.TemporaryDirectory(prefix="olist-six-") as tmp, ZipFile(source) as archive:
+        members = archive.infolist()
+        if len(members) > MAX_ARCHIVE_MEMBERS:
+            raise ValueError("Source ZIP has too many entries")
         paths: dict[str, Path] = {}
+        total_bytes = 0
         # Do not extract arbitrary archive paths; resolve by basename, reject ambiguity.
         for name, (filename, _) in INPUTS.items():
-            matches = [entry for entry in archive.infolist() if not entry.is_dir() and Path(entry.filename).name == filename]
+            matches = [entry for entry in members if not entry.is_dir() and Path(entry.filename).name == filename]
             if len(matches) != 1:
                 raise ValueError(f"Expected exactly one {filename} in archive; found {len(matches)}")
+            info = matches[0]
+            safe_zip_entry(info)
             target = Path(tmp) / filename
-            with archive.open(matches[0]) as inp, target.open("wb") as out:
-                import shutil
-                shutil.copyfileobj(inp, out)
+            with archive.open(info) as inp, target.open("wb") as out:
+                actual_size = copy_csv_bounded(inp, out)
+            total_bytes += actual_size
+            if total_bytes > MAX_TOTAL_REQUIRED_CSV_BYTES:
+                raise ValueError("Required CSVs exceed the allowed total size")
             paths[name] = target
         yield paths, digest(source)
 
