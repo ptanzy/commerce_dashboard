@@ -7,7 +7,6 @@ import type {
   HealthState, OperationTrace, RecoveryDiagnosticRecord, SanitizedDashboardState,
   UserActionCode,
 } from './diagnostics';
-import { deriveRecoveryIssues } from './recovery';
 
 const INCIDENT_CODES = new Set<EventCode>([
   'DATASET_LOAD_FAILED','GEOGRAPHY_LOAD_FAILED','CSV_EXPORT_FAILED','STORAGE_WRITE_FAILED',
@@ -16,8 +15,10 @@ const INCIDENT_CODES = new Set<EventCode>([
 ]);
 const MAX_INCIDENTS=12;
 const WINDOW_MS=120_000;
+/** A positive recovery must remain uncontradicted for this long before archival. */
+export const RECOVERY_CONFIRMATION_MS=60_000;
 
-export type InvestigationStatus = 'unresolved' | 'not-confirmed-active' | 'recovery-observed';
+export type InvestigationStatus = 'unresolved' | 'not-confirmed-active' | 'recovery-observed' | 'recovered';
 export type EvidenceAssessment = 'supported-by-context' | 'plausible-unverified' | 'less-supported';
 export interface IncidentCase {
   readonly id: string;
@@ -29,6 +30,10 @@ export interface IncidentCase {
   readonly occurrences: number;
   readonly severity: 'error' | 'fatal';
   readonly status: InvestigationStatus;
+  /** Set only by a subsystem-specific success after the most recent matching failure. */
+  readonly recoveryObservedAt?: string;
+  /** Historical episodes retain a distinct bounded event-derived identity. */
+  readonly archivedAt?: string;
 }
 export interface RootCauseHypothesis {
   readonly id: string;
@@ -92,27 +97,75 @@ function isIncident(e:DiagnosticEvent): e is DiagnosticEvent & {code:EventCode} 
   return (e.level==='error'||e.level==='fatal')&&INCIDENT_CODES.has(e.code as EventCode);
 }
 
-/** Fingerprints contain allowlisted subsystem/code only. Aggregate recurrences without storing inputs. */
-export function listIncidentCases(snapshot:DiagnosticSnapshot): IncidentCase[] {
-  const rows = new Map<string,{code:EventCode;area:DiagnosticArea;first:string;last:string;lastIndex:number;count:number;severity:'error'|'fatal'}>();
-  for(const [idx,e] of snapshot.events.entries()){
-    if(!isIncident(e))continue;
-    const id=`${e.code}:${e.area}`;
-    const existing=rows.get(id);
-    if(existing){existing.count++;if(e.timestamp<existing.first)existing.first=e.timestamp;
-      existing.last=e.timestamp;existing.lastIndex=idx;
-      if(e.level==='fatal')existing.severity='fatal';
-    } else rows.set(id,{code:e.code,area:e.area,first:e.timestamp,last:e.timestamp,lastIndex:idx,count:1,severity:e.level==='fatal'?'fatal':'error'});
+/**
+ * Pure event-derived episodes. A matching success begins a grace period; later errors
+ * cancel it or start a new episode when the previous grace period already elapsed.
+ * No second store, no unbounded storage, and no reliance on a mounted React timer.
+ * A history episode's id includes only allowlisted identifiers and its event index.
+ */
+export function listIncidentCases(snapshot:DiagnosticSnapshot, now=Date.now()): IncidentCase[] {
+  type Episode={code:EventCode;area:DiagnosticArea;first:string;last:string;count:number;
+    severity:'error'|'fatal';lastFailureMs:number;recoveryMs:number|null;recoveryAt?:string;ordinal:number};
+  const current=new Map<string,Episode>();
+  const archived:IncidentCase[]=[];
+  let ordinal=0;
+  function materialize(key:string,row:Episode,historical:boolean):IncidentCase {
+    return Object.freeze({id:historical?`${key}@${row.ordinal}`:key,code:row.code,area:row.area,
+      title:TITLES[row.code]??'Unexpected application failure',firstSeen:row.first,lastSeen:row.last,
+      occurrences:row.count,severity:row.severity,
+      status:historical?'recovered':row.recoveryMs!==null?'recovery-observed':'unresolved',
+      ...(row.recoveryAt?{recoveryObservedAt:row.recoveryAt}:{}),
+      ...(historical&&row.recoveryAt?{archivedAt:new Date(row.recoveryMs!+RECOVERY_CONFIRMATION_MS).toISOString()}:{}),
+    } as IncidentCase);
   }
-  const active=new Set(deriveRecoveryIssues(snapshot).map(issue=>issue.key));
-  return [...rows].map(([id,row])=>{
-    const laterEvents=snapshot.events.slice(row.lastIndex+1);
-    const recovered=SUCCESS[row.code]&&laterEvents.some(e=>e.code===SUCCESS[row.code]&&e.area===row.area) ||
-      (row.code==='RENDER_FAILED'&&laterEvents.some(e=>e.code==='RECOVERY_VERIFIED'&&e.area===row.area));
-    return Object.freeze({id,code:row.code,area:row.area,title:TITLES[row.code]??'Unexpected application failure',
-      firstSeen:row.first,lastSeen:row.last,occurrences:row.count,severity:row.severity,
-      status:recovered?'recovery-observed':active.has(id)?'unresolved':'not-confirmed-active'} as IncidentCase);
-  }).sort((a,b)=>b.lastSeen.localeCompare(a.lastSeen)).slice(0,MAX_INCIDENTS);
+  for(const e of snapshot.events){
+    const time=Date.parse(e.timestamp);
+    if(!Number.isFinite(time))continue;
+    if(isIncident(e)){
+      const key=`${e.code}:${e.area}`;
+      let row=current.get(key);
+      if(row&&row.recoveryMs!==null&&time>=row.recoveryMs+RECOVERY_CONFIRMATION_MS){
+        archived.push(materialize(key,row,true));current.delete(key);row=undefined;
+      }
+      if(!row){
+        row={code:e.code,area:e.area,first:e.timestamp,last:e.timestamp,count:0,
+          severity:'error',lastFailureMs:time,recoveryMs:null,ordinal:++ordinal};
+        current.set(key,row);
+      }
+      row.count++;
+      if(e.timestamp<row.first)row.first=e.timestamp;
+      // A late-delivered older failure cannot reverse a newer recovery observation.
+      if(time<row.lastFailureMs||(row.recoveryMs!==null&&time<row.recoveryMs))continue;
+      row.last=e.timestamp;row.lastFailureMs=time;
+      if(e.level==='fatal')row.severity='fatal';
+      row.recoveryMs=null;row.recoveryAt=undefined;
+      continue;
+    }
+    // A positive signal applies only to its matching component/error type.
+    for(const [key,row] of current){
+      const expected=SUCCESS[row.code];
+      const matches=e.area===row.area && (expected===e.code ||
+        (row.code==='RENDER_FAILED'&&e.code==='RECOVERY_VERIFIED'));
+      if(!matches||e.level!=='info'||row.recoveryMs!==null||time<row.lastFailureMs)continue;
+      row.recoveryMs=time;row.recoveryAt=e.timestamp;
+    }
+  }
+  const active:IncidentCase[]=[];
+  for(const [key,row] of current){
+    if(row.recoveryMs!==null&&now>=row.recoveryMs+RECOVERY_CONFIRMATION_MS)
+      archived.push(materialize(key,row,true));
+    else active.push(materialize(key,row,false));
+  }
+  const newest=(a:IncidentCase,b:IncidentCase)=>b.lastSeen.localeCompare(a.lastSeen)||b.id.localeCompare(a.id);
+  // Active investigations must not be displaced by an abundance of old recoveries.
+  return [...active.sort(newest),...archived.sort(newest)].slice(0,MAX_INCIDENTS);
+}
+
+/** Earliest outstanding recovery-confirmation deadline, if any. */
+export function nextIncidentConfirmationAt(cases:readonly IncidentCase[]):number|null {
+  const deadlines=cases.filter(c=>c.status==='recovery-observed'&&c.recoveryObservedAt)
+    .map(c=>Date.parse(c.recoveryObservedAt!)+RECOVERY_CONFIRMATION_MS);
+  return deadlines.length?Math.min(...deadlines):null;
 }
 
 type HypothesisTemplate={id:string;title:string;steps:readonly string[];confirm:string;refute:string};
@@ -276,7 +329,8 @@ function relative(timestamp:string,failure:string): 'before'|'during'|'after' {
 export function investigateIncident(snapshot:DiagnosticSnapshot,incidentId:string):DeveloperIncidentReport|null {
   const incident=listIncidentCases(snapshot).find(c=>c.id===incidentId);
   if(!incident)return null;
-  const latest=[...snapshot.events].reverse().find(e=>isIncident(e)&&e.code===incident.code&&e.area===incident.area);
+  const latest=[...snapshot.events].reverse().find(e=>isIncident(e)&&e.code===incident.code&&e.area===incident.area&&
+    e.timestamp>=incident.firstSeen&&e.timestamp<=incident.lastSeen);
   if(!latest)return null;
   const at=Date.parse(incident.lastSeen);
   const relevant=snapshot.events.filter(e=>Math.abs(Date.parse(e.timestamp)-at)<=WINDOW_MS);
@@ -301,7 +355,7 @@ export function investigateIncident(snapshot:DiagnosticSnapshot,incidentId:strin
   ];
   if(!snapshot.healthCheckedAt)gaps.push('No explicit health-check run is available for this session.');
   if(!latest.state)gaps.push('No aggregate dashboard-state snapshot was captured with this error.');
-  const step=incident.status==='recovery-observed'?
+  const step=incident.status==='recovery-observed'||incident.status==='recovered'?
     'The immediate operation appears recovered; verify that it stays healthy across repeated use.':
     'The issue is unresolved or unverified; investigate the first hypothesis using its confirmation and disconfirmation checks.';
   return Object.freeze({

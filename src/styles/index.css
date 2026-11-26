@@ -635,3 +635,10 @@ h1,h2,h3 { font-family:'Segoe UI',Arial,system-ui,sans-serif; }
   stroke:var(--chart-select);
   stroke-opacity:.55;
 }
+/* Incident lifecycle: compact when inactive, history reachable without reopening findings. */
+.developer-investigation-history-link {justify-self:start;border:0;padding:2px 0;background:transparent;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:12px;}
+.developer-investigation-empty {font-size:12px;}
+.developer-investigation-view {display:flex;flex-wrap:wrap;gap:8px;}
+.developer-investigation-view button {border:1px solid var(--stroke-strong);border-radius:7px;padding:6px 10px;background:var(--panel);color:var(--text);cursor:pointer;}
+.developer-investigation-view button[aria-pressed="true"] {font-weight:700;border-color:var(--heading);}
+.developer-investigation-history-link:focus-visible,.developer-investigation-view button:focus-visible {outline:2px solid var(--heading);outline-offset:2px;}

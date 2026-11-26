@@ -1,11 +1,11 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronUp, ClipboardList, Download, SearchCheck } from 'lucide-react';
 import {
   getDiagnosticsSnapshot, recordEvent, runDiagnosticsHealthChecks,
 } from '../observability/diagnostics';
 import type { DiagnosticSnapshot } from '../observability/diagnostics';
 import {
-  incidentReportBundle, incidentReportMarkdown, investigateIncident, listIncidentCases,
+  incidentReportBundle, incidentReportMarkdown, investigateIncident, listIncidentCases, nextIncidentConfirmationAt,
 } from '../observability/investigation';
 import type { DeveloperIncidentReport } from '../observability/investigation';
 
@@ -27,16 +27,40 @@ function downloadReport(content:string,name:string,mime:string):boolean {
 
 /** No remote AI requests. Creates a testable, evidence-limited developer handoff. */
 export function DeveloperIncidentPanel({diagnostics}: {diagnostics:DiagnosticSnapshot}) {
-  const cases=listIncidentCases(diagnostics);
+  // Time advances without new diagnostics events; all lifecycle truth remains in the
+  // bounded persisted event log, never in this timer or local component state.
+  const [clock,setClock]=useState(()=>Date.now());
+  const cases=listIncidentCases(diagnostics,Math.max(clock,Date.now()));
+  const active=cases.filter(c=>c.status!=='recovered');
+  const history=cases.filter(c=>c.status==='recovered');
+  const [view,setView]=useState<'active'|'history'>('active');
   const [selected,setSelected]=useState('');
   const [report,setReport]=useState<DeveloperIncidentReport|null>(null);
   const [notice,setNotice]=useState('');
-  const [sectionExpanded,setSectionExpanded]=useState(true);
+  // null = automatic (expanded with active work, compact otherwise).
+  const [manualExpanded,setManualExpanded]=useState<boolean|null>(null);
   const [reportExpanded,setReportExpanded]=useState(true);
   const sectionBodyId=useId();
   const reportBodyId=useId();
-  const chosen=cases.some(c=>c.id===selected)?selected:(cases[0]?.id??'');
-  const visibleReport=report&&cases.some(c=>c.id===report.incident.id)?report:null;
+  const displayed=view==='active'?active:history;
+  const sectionExpanded=manualExpanded??(active.length>0);
+  const chosen=displayed.some(c=>c.id===selected)?selected:(displayed[0]?.id??'');
+  const visibleReport=report&&displayed.some(c=>c.id===report.incident.id)?report:null;
+  const nextDeadline=nextIncidentConfirmationAt(cases);
+  useEffect(()=>{
+    if(nextDeadline===null)return;
+    const refresh=()=>setClock(Date.now());
+    const remaining=Math.max(0,nextDeadline-Date.now());
+    const timer=window.setTimeout(refresh,remaining);
+    document.addEventListener('visibilitychange',refresh);
+    window.addEventListener('focus',refresh);
+    return ()=>{window.clearTimeout(timer);document.removeEventListener('visibilitychange',refresh);
+      window.removeEventListener('focus',refresh);};
+  },[nextDeadline,diagnostics]);
+  function switchView(next:'active'|'history'):void {
+    setView(next);setSelected('');setReport(null);setNotice('');
+    if(next==='history')setManualExpanded(true);
+  }
   function investigate():void {
     if(!chosen)return;
     // Non-destructive, synchronous probes. Never reset saved views or selections.
@@ -58,20 +82,28 @@ export function DeveloperIncidentPanel({diagnostics}: {diagnostics:DiagnosticSna
     <h3><button type="button" className="developer-investigation-toggle"
       aria-expanded={sectionExpanded} aria-controls={sectionBodyId}
       aria-label={`${sectionExpanded?'Collapse':'Expand'} developer incident investigation`}
-      onClick={()=>setSectionExpanded(expanded=>!expanded)}>
+      onClick={()=>setManualExpanded(!sectionExpanded)}>
       <ClipboardList size={16} aria-hidden="true"/>
       <span>Developer incident investigation</span>
-      <span className="developer-investigation-count">{cases.length} {cases.length===1?'incident':'incidents'}</span>
+      <span className="developer-investigation-count">{active.length} active {active.length===1?'incident':'incidents'}</span>
       {sectionExpanded?<ChevronUp size={16} aria-hidden="true"/>:<ChevronDown size={16} aria-hidden="true"/>}
     </button></h3>
+    {history.length>0?<button type="button" className="developer-investigation-history-link"
+      onClick={()=>switchView('history')} aria-label={`View recovered incident history (${history.length})`}>
+      {history.length} recovered in history
+    </button>:active.length===0?<span className="diagnostics-muted developer-investigation-empty">No active incidents</span>:null}
     <div id={sectionBodyId} className="developer-investigation-body" hidden={!sectionExpanded}>
     <p className="diagnostics-muted">For unresolved or unfamiliar errors. Groups recurring failures, gathers safe context, ranks possible causes and recommends tests to confirm or rule them out. Nothing is sent automatically.</p>
-    {!cases.length?<p className="diagnostics-muted">No error incidents in the retained session history.</p>:<>
+    <div className="developer-investigation-view" role="group" aria-label="Incident list view">
+      <button type="button" aria-pressed={view==='active'} onClick={()=>switchView('active')}>Active ({active.length})</button>
+      <button type="button" aria-pressed={view==='history'} onClick={()=>switchView('history')}>History ({history.length})</button>
+    </div>
+    {!displayed.length?<p className="diagnostics-muted">{view==='active'?'No active incidents.':'No recovered incidents in retained session history.'}</p>:<>
       <div className="developer-investigation-controls">
         <label htmlFor="developer-incident-select">Incident</label>
         <select id="developer-incident-select" aria-label="Choose incident to investigate" value={chosen}
           onChange={e=>{setSelected(e.target.value);setReport(null);setReportExpanded(true);setNotice('');}}>
-          {cases.map(c=><option value={c.id} key={c.id}>{c.area} · {c.code} ({c.occurrences})</option>)}
+          {displayed.map(c=><option value={c.id} key={c.id}>{c.area} · {c.code} ({c.occurrences})</option>)}
         </select>
         <button type="button" onClick={investigate}><SearchCheck size={15} aria-hidden="true"/> Investigate and check health</button>
       </div>
@@ -85,7 +117,9 @@ export function DeveloperIncidentPanel({diagnostics}: {diagnostics:DiagnosticSna
           {reportExpanded?<ChevronUp size={16} aria-hidden="true"/>:<ChevronDown size={16} aria-hidden="true"/>}
         </button></div>
         <div id={reportBodyId} className="developer-incident-findings" hidden={!reportExpanded}>
-        <p className="diagnostics-muted">{visibleReport.incident.occurrences} occurrence(s) in retained history · Last seen {visibleReport.incident.lastSeen}</p>
+        <p className="diagnostics-muted">{visibleReport.incident.occurrences} occurrence(s) in retained history · Last seen {visibleReport.incident.lastSeen}
+          {visibleReport.incident.recoveryObservedAt?` · Recovery observed ${visibleReport.incident.recoveryObservedAt}`:''}
+          {visibleReport.incident.archivedAt?` · Recovery confirmed ${visibleReport.incident.archivedAt}`:''}</p>
         <p><strong>Root cause not confirmed.</strong> Evidence-based hypotheses only; rankings are investigative priorities, not probabilities.</p>
         {visibleReport.relatedAction?<p className="diagnostics-muted">Recent action: {visibleReport.relatedAction.code} (#{visibleReport.relatedAction.id}). Timing alone does not establish cause.</p>:null}
         <h4>Possible causes and how to investigate</h4>
