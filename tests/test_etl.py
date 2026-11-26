@@ -219,8 +219,10 @@ class DuckDBIntegrationTests(unittest.TestCase):
             out = Path(temp)/'out'
             report = prepare(archive,out)
             import json
-            generated_orders = json.loads((out/'orders.json').read_text())
-            generated_items = json.loads((out/'items.json').read_text())
+            pointer = json.loads((out/'current.json').read_text())
+            published = out / 'generations' / pointer['generation']
+            generated_orders = json.loads((published/'orders.json').read_text())
+            generated_items = json.loads((published/'items.json').read_text())
             self.assertEqual((len(generated_orders),len(generated_items)),(10,10))
             self.assertEqual(report['manifest']['invalidCounts']['invalidItemPrice'],1)
             by_id = {o['orderId']:o for o in generated_orders}

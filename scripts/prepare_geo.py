@@ -163,6 +163,91 @@ def convert_geojson(source: dict, *, diagnostics: dict | None = None) -> dict:
             "arcs": arcs}
 
 
+
+def _signed_area2(points: list[tuple[int, int]]) -> int:
+    return sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(points, points[1:]))
+
+
+def _simplify_segment(points: list[tuple[int, int]], tolerance_sq: int) -> list[tuple[int, int]]:
+    """Nonrecursive Ramer-Douglas-Peucker in source quantized coordinates.
+
+    Only discard intermediate vertices: endpoints and arc identities remain stable.
+    No third-party dependency and no changes to filter/metric data.
+    """
+    if len(points) <= 2:
+        return points
+    keep = bytearray(len(points))
+    keep[0] = keep[-1] = 1
+    pending = [(0, len(points) - 1)]
+    while pending:
+        start, end = pending.pop()
+        ax, ay = points[start]
+        bx, by = points[end]
+        dx, dy = bx - ax, by - ay
+        length_sq = dx * dx + dy * dy
+        most = -1.0
+        index = -1
+        for i in range(start + 1, end):
+            px, py = points[i]
+            if length_sq:
+                u = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length_sq))
+                distance_sq = (px - ax - u * dx) ** 2 + (py - ay - u * dy) ** 2
+            else:
+                distance_sq = (px - ax) ** 2 + (py - ay) ** 2
+            if distance_sq > most:
+                most, index = distance_sq, i
+        if most > tolerance_sq:
+            keep[index] = 1
+            pending.append((start, index))
+            pending.append((index, end))
+    return [point for point, selected in zip(points, keep) if selected]
+
+
+def simplify_topology(topology: dict, tolerance_units: int = 2500) -> dict:
+    """Reduce static map geometry while retaining UF identifiers and valid rings.
+
+    2500 quantized units is 0.025 geographic degrees, approximately one-third
+    of a pixel in the 524px Brazil map. Every ring keeps its original start,
+    closure, winding and topology reference. Tiny/unsafe rings remain unsimplified.
+    This is performed offline, *never* on a map metric or filter click.
+    """
+    if tolerance_units < 0 or tolerance_units > 5000:
+        raise ValueError('Map simplification tolerance must be between 0 and 5000 units')
+    result = {**topology, 'arcs': []}
+    threshold = tolerance_units ** 2
+    for encoded in topology['arcs']:
+        absolute: list[tuple[int, int]] = []
+        x = y = 0
+        for dx, dy in encoded:
+            x += dx
+            y += dy
+            absolute.append((x, y))
+        if tolerance_units == 0 or len(absolute) < 5 or absolute[0] != absolute[-1]:
+            selected = absolute
+        else:
+            # RDP applied to a closed ring with coincident endpoints would
+            # collapse the entire ring. Split at its most distant vertex.
+            anchor = max(range(1, len(absolute) - 1),
+                         key=lambda i: (absolute[i][0] - absolute[0][0]) ** 2 +
+                                       (absolute[i][1] - absolute[0][1]) ** 2)
+            first = _simplify_segment(absolute[:anchor + 1], threshold)
+            second = _simplify_segment(absolute[anchor:], threshold)
+            selected = first[:-1] + second
+            old_area, new_area = _signed_area2(absolute), _signed_area2(selected)
+            # Preserve rings that are too small, inverted, or significantly
+            # changed in area. This also keeps rare detailed island shapes.
+            if (len(selected) < 4 or len(set(selected[:-1])) < 3 or
+                old_area * new_area <= 0 or
+                abs(new_area - old_area) > abs(old_area) * 0.005):
+                selected = absolute
+        previous_x = previous_y = 0
+        delta: list[list[int]] = []
+        for nx, ny in selected:
+            delta.append([nx - previous_x, ny - previous_y])
+            previous_x, previous_y = nx, ny
+        result['arcs'].append(delta)
+    return result
+
 def validate_topology(topology: dict) -> dict:
     if topology.get("type") != "Topology":
         raise ValueError("Invalid topology type")
@@ -235,8 +320,11 @@ def main() -> None:
                 data = response.read()
         source_sha = hashlib.sha256(data).hexdigest()
         diagnostics: dict[str, int] = {}
-        result = convert_geojson(json.loads(data), diagnostics=diagnostics)
+        original = convert_geojson(json.loads(data), diagnostics=diagnostics)
+        result = simplify_topology(original)
         summary = validate_topology(result)
+        diagnostics["originalPoints"] = sum(len(arc) for arc in original["arcs"])
+        diagnostics["renderPoints"] = sum(len(arc) for arc in result["arcs"])
         args.output.parent.mkdir(parents=True,exist_ok=True)
         blob = (json.dumps(result,ensure_ascii=False,separators=(',',':'))+"\n").encode("utf-8")
         args.output.write_bytes(blob)

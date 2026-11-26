@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
@@ -69,6 +69,8 @@ export function parseBrazilTopology(input: unknown): FeatureCollection<Geometry>
 function useBrazilGeography(): MapStatus & {retry:()=>void} {
   const [attempt,setAttempt] = useState(0);
   const [result, setResult] = useState<MapStatus>({status:'loading'});
+  // Keep the registered recovery action stable across ordinary map redraws.
+  const retry = useCallback(() => setAttempt(current => current + 1), []);
   useEffect(() => {
     const controller = new AbortController();
     setResult({status:'loading'});
@@ -91,7 +93,7 @@ function useBrazilGeography(): MapStatus & {retry:()=>void} {
       }});
     return () => controller.abort();
   }, [attempt]);
-  return {...result,retry:()=>setAttempt(current=>current+1)};
+  return {...result,retry};
 }
 
 export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
@@ -124,12 +126,16 @@ export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters
   const metricDescription = metric === 'orders' ? 'Darker means more distinct orders.' : metric === 'onTime'
     ? 'Darker means higher on-time rate. Fewer than 30 eligible deliveries are shown neutral.'
     : 'Darker means longer median delivery duration. Fewer than 30 valid durations are shown neutral.';
+  // Project the immutable geography only when the loaded TopoJSON changes. The hook
+  // returns a new status wrapper on every render; depending on that wrapper used to
+  // re-project all 27 states for every metric, mode, or selection click.
+  const geography = geo.status === 'ready' ? geo.geography : null;
   const paths = useMemo(() => {
-    if (geo.status !== 'ready') return [];
-    const projection = geoMercator().fitExtent([[18, 12], [506, 427]], geo.geography);
+    if (geography === null) return [];
+    const projection = geoMercator().fitExtent([[18, 12], [506, 427]], geography);
     const path = geoPath(projection);
-    return geo.geography.features.map(f => ({code: String(f.id ?? f.properties?.SIGLA), d: path(f) ?? ''}));
-  }, [geo]);
+    return geography.features.map(f => ({code: String(f.id ?? f.properties?.SIGLA), d: path(f) ?? ''}));
+  }, [geography]);
 
   const selectState = (code: string) => {
     dispatch({type:'toggle_value', dimension: mode === 'origin' ? 'sellerStates' : 'customerStates', value:code});

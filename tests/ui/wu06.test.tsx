@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,within} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,within,waitFor} from '@testing-library/react';
 import {DashboardContent} from '../../src/app/App';
 import {BRAZIL_STATES} from '../../src/components/stateNames';
 import {dataset} from './fixtures';
@@ -32,6 +32,17 @@ describe('WU-06 delivery analytics presentation',()=>{
     fireEvent.click(controls.getByRole('button',{name:'Median delivery'}));
     expect(screen.getByRole('img',{name:/Map of Brazil showing seller origins by median delivery/})).toBeInTheDocument();
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('3');
+  });
+  it('acknowledges a Sankey measure click before its expensive recalculation, then updates the data label',async()=>{
+    mockGeo(); render(<DashboardContent dataset={dataset}/>);
+    const measures=within(screen.getByRole('group',{name:'Sankey measurement'}));
+    fireEvent.click(measures.getByRole('button',{name:'Freight charged'}));
+    expect(measures.getByRole('button',{name:'Freight charged'})).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByText('Updating flow measure…')).toBeInTheDocument();
+    // The previous result remains accurately labeled until the new calculation commits.
+    expect(screen.getByText(/Rank and size flows by item count/)).toBeInTheDocument();
+    await waitFor(()=>expect(screen.getByText(/Rank and size flows by freight charged/)).toBeInTheDocument());
+    expect(screen.queryByText('Updating flow measure…')).not.toBeInTheDocument();
   });
   it('shows volume leaders and honestly omits underpowered punctuality rankings',()=>{
     mockGeo(); render(<DashboardContent dataset={dataset}/>);

@@ -5,7 +5,9 @@ const { performance } = require('node:perf_hooks');
 const { buildDataIndex } = require('../dist-test/data/indexes.js');
 const { selectCohort } = require('../dist-test/domain/selectors.js');
 const { selectExplorerOrders, selectOrderDetail } = require('../dist-test/domain/orderExplorer.js');
-const dir = path.resolve(__dirname,'../public/data');
+const root = path.resolve(__dirname,'../public/data');
+const pointer=path.join(root,'current.json');
+const dir = fs.existsSync(pointer)?path.join(root,'generations',JSON.parse(fs.readFileSync(pointer,'utf8')).generation):root;
 function load(name) {
   const file=path.join(dir,name);
   if(!fs.existsSync(file)) throw new Error(`Missing ${file}. Run the Python Olist ETL first.`);

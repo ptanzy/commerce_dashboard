@@ -9,26 +9,35 @@ export interface Cohort {
 
 /** Seller and category conditions MUST match the same item. */
 export function selectCohort(index: DataIndex, filters: Filters): Cohort {
-  const baseOrders = index.orders.filter((order) => {
+  // Convert multi-select arrays once per calculation, not once per matching record.
+  // Preserve input order, null-date exclusion, zero-item orders, and same-item matching.
+  const customerStates = filters.customerStates.length ? new Set(filters.customerStates) : null;
+  const sellerStates = filters.sellerStates.length ? new Set(filters.sellerStates) : null;
+  const categories = filters.categories.length ? new Set(filters.categories) : null;
+  const itemFilter = sellerStates !== null || categories !== null;
+  const baseOrders: OrderFact[] = [];
+  const baseIds = new Set<string>();
+  for (const order of index.orders) {
     const date = order.purchaseDate;
-    return date !== null &&
-      (filters.purchaseDateFrom === null || date >= filters.purchaseDateFrom) &&
-      (filters.purchaseDateTo === null || date <= filters.purchaseDateTo) &&
-      (filters.customerStates.length === 0 || (order.customerState !== null && filters.customerStates.includes(order.customerState)));
-  });
-  const baseIds = new Set(baseOrders.map((o) => o.orderId));
-  const eligibleItems = index.items.filter((item) =>
-    baseIds.has(item.orderId) &&
-    (filters.sellerStates.length === 0 || (item.sellerState !== null && filters.sellerStates.includes(item.sellerState))) &&
-    (filters.categories.length === 0 || filters.categories.includes(item.category)));
-  const itemFilter = filters.sellerStates.length > 0 || filters.categories.length > 0;
-  const eligibleOrderIds = itemFilter
-    ? new Set(eligibleItems.map((item) => item.orderId))
-    : baseIds;
+    if (date === null ||
+        (filters.purchaseDateFrom !== null && date < filters.purchaseDateFrom) ||
+        (filters.purchaseDateTo !== null && date > filters.purchaseDateTo) ||
+        (customerStates !== null && (order.customerState === null || !customerStates.has(order.customerState)))) continue;
+    baseOrders.push(order);
+    baseIds.add(order.orderId);
+  }
+  const eligibleItems: ItemFact[] = [];
+  const matchingIds = itemFilter ? new Set<string>() : baseIds;
+  for (const item of index.items) {
+    if (!baseIds.has(item.orderId) ||
+        (sellerStates !== null && (item.sellerState === null || !sellerStates.has(item.sellerState))) ||
+        (categories !== null && !categories.has(item.category))) continue;
+    eligibleItems.push(item);
+    if (itemFilter) matchingIds.add(item.orderId);
+  }
   const eligibleOrders = itemFilter
-    ? baseOrders.filter((o) => eligibleOrderIds.has(o.orderId))
-    : baseOrders;
-  return { eligibleOrders, eligibleItems, eligibleOrderIds };
+    ? baseOrders.filter(order => matchingIds.has(order.orderId)) : baseOrders;
+  return { eligibleOrders, eligibleItems, eligibleOrderIds: matchingIds };
 }
 
 /** Drill-down only: exact directed pairs, OR across pairs, AND with global context.
@@ -73,6 +82,14 @@ export function quantileR7(values: readonly number[], p: number): number | null 
   return clean[low] + (clean[high] - clean[low]) * fraction;
 }
 
+/** R-7 interpolation over an already ascending, finite array. */
+function quantileSortedR7(sorted: readonly number[], p: number): number | null {
+  if (!sorted.length) return null;
+  const pos = (sorted.length - 1) * p;
+  const low = Math.floor(pos), high = Math.ceil(pos), fraction = pos - low;
+  return sorted[low] + (sorted[high] - sorted[low]) * fraction;
+}
+
 /** Safe even if an input record has not passed ETL validation. */
 export function isDeliveredDurationEligible(order: OrderFact): boolean {
   return order.status === 'delivered' &&
@@ -105,13 +122,15 @@ export function computeMetrics(cohort: Cohort): Metrics {
       freightChargeBRL += item.freightChargeBRL;
     else invalidFreightItems++;
   }
+  // One sort serves both percentiles; sorting is a dominant cost for large cohorts.
+  durations.sort((a, b) => a - b);
   return {
     distinctOrders: cohort.eligibleOrders.length,
     deliveredDurationCount: durations.length,
     onTimeDenominator, onTimeNumerator,
     onTimeRate: onTimeDenominator > 0 ? onTimeNumerator / onTimeDenominator : null,
-    medianDeliveryDays: quantileR7(durations, 0.5),
-    p95DeliveryDays: quantileR7(durations, 0.95),
+    medianDeliveryDays: quantileSortedR7(durations, 0.5),
+    p95DeliveryDays: quantileSortedR7(durations, 0.95),
     freightChargeBRL, itemPriceBRL,
     freightToPriceRatio: itemPriceBRL > 0 ? freightChargeBRL / itemPriceBRL : null,
     invalidPriceItems, invalidFreightItems,

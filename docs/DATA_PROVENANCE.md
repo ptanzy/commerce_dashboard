@@ -23,6 +23,7 @@
 - **Identifier sample verification:** Parsed complete per-state source for DF and AL. Each is a `FeatureCollection` with one `MultiPolygon` and properties `SIGLA` = the two-letter code, `Estado` = state name, and feature `id` equal to code.
 - **Mapping:** Preserve/validate `properties.SIGLA` or feature `id` → Olist's two-letter `seller_state`/`customer_state`. All Olist source codes appear in the 27-file list.
 - **Implementation:** Fetch pinned GeoJSON, validate 27 unique features, strip legacy demographic properties, simplify and convert to `public/geo/brazil-states.topojson` with `objects.estados` and stable UF IDs. Calculate resulting file SHA-256 and test topology feature count / arc integrity after conversion.
+- **WU-10 display-complexity update (2026-11-25):** The offline geography generator now applies bounded ring simplification after quantization (2,500 units / 0.025°, maximum 0.5% area difference per ring; rejects degeneracy or winding reversal). The same 27 UF IDs, 284 arc references, geography source, and MIT attribution remain. The committed TopoJSON was reduced from 130,927 to 18,882 points for faster static SVG painting; see `WU10_PHASE3B_MAP_RENDER_COMPLEXITY.md`. The regenerated file checksum is different from the previous unsimplified export.
 
 ### Open geography acceptance gate
 

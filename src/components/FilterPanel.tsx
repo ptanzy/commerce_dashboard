@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Filter, RotateCcw, Search, X } from 'lucide-react';
 import type { Dispatch } from 'react';
 import { categoryLabel } from '../domain/selectors';
@@ -19,6 +19,7 @@ interface Props {
   options: FilterOptions;
   matchedCount: number;
   totalCount: number;
+  updating?: boolean;
 }
 
 function SelectedChip({ label, onClear }: {label: string; onClear: () => void}) {
@@ -39,10 +40,19 @@ interface MultiFilterProps {
 
 function MultiFilter({ label, values, options, dimension, display, dispatch, searchable = false }: MultiFilterProps) {
   const [query,setQuery] = useState('');
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) details.open = false;
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
   const filtered = searchable ? options.filter(value => display(value).toLowerCase().includes(query.trim().toLowerCase())) : options;
   return <div className="field multi-filter-field">
     <span className="field-label">{label} <span className="label-hint">(multi-select)</span></span>
-    <details className="multi-filter" onKeyDown={event=>{if(event.key==='Escape') (event.currentTarget as HTMLDetailsElement).open=false;}}>
+    <details ref={detailsRef} className="multi-filter" onKeyDown={event=>{if(event.key==='Escape') (event.currentTarget as HTMLDetailsElement).open=false;}}>
       <summary className="field-control multi-filter-trigger" aria-label={label}>
         {values.length === 0 ? `All ${label.toLowerCase()}` : values.length === 1 ? display(values[0]) : `${values.length} selected`}
         <span aria-hidden="true" className="multi-filter-chevron">⌄</span>
@@ -62,7 +72,7 @@ function MultiFilter({ label, values, options, dimension, display, dispatch, sea
   </div>;
 }
 
-export function FilterPanel({ filters, dispatch, options, matchedCount, totalCount }: Props) {
+export function FilterPanel({ filters, dispatch, options, matchedCount, totalCount, updating = false }: Props) {
   const dateActive = filters.purchaseDateFrom !== null || filters.purchaseDateTo !== null;
   const active = Number(dateActive) + filters.customerStates.length + filters.sellerStates.length + filters.categories.length + filters.focusedFlows.length;
   const handleDateFrom = (from: string | null) => dispatch({type: 'set_date_range', from, to: filters.purchaseDateTo && from && from > filters.purchaseDateTo ? null : filters.purchaseDateTo});
@@ -121,7 +131,7 @@ export function FilterPanel({ filters, dispatch, options, matchedCount, totalCou
           />}
         </>}
       </div>
-      <span className="result-count" role="status" aria-live="polite">{matchedCount.toLocaleString('en-US')} <span>of {totalCount.toLocaleString('en-US')} orders</span></span>
+      <span className="result-count" role="status" aria-live="polite">{updating ? <span className="filter-updating">Updating results… · </span> : null}{matchedCount.toLocaleString('en-US')} <span>of {totalCount.toLocaleString('en-US')} orders</span></span>
     </div>
   </section>;
 }

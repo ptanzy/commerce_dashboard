@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState, memo } from 'react';
 import type { Dispatch } from 'react';
 import {
   ArrowDownRight, ArrowUpRight, BarChart3, CircleAlert, Database,
@@ -72,7 +72,18 @@ export function deriveFilterOptions(dataset: DashboardDataset): FilterOptions {
   };
 }
 
-function ChartsSection({dataset, cohort, filters, dispatch}: {dataset: DashboardDataset; cohort: Cohort; filters: Filters; dispatch: Dispatch<FilterAction>}) {
+// Stable analytical props should not force unrelated expensive charts to render
+// when a checkbox or flow receives its immediate UI update.
+const MemoBrazilMap = memo(BrazilMap);
+const MemoDeliveryTrends = memo(DeliveryTrends);
+const MemoShippingSankey = memo(ShippingSankey);
+const MemoKpiCards = memo(KpiCards);
+const MemoPeriodComparison = memo(PeriodComparisonPanel);
+const MemoCategoryLeaderboard = memo(CategoryLeaderboard);
+const MemoDelayDistribution = memo(DelayDistributionChart);
+const MemoOrderExplorer = memo(OrderExplorer);
+
+function ChartsSection({dataset, cohort, filters, selectionFilters, dispatch}: {dataset: DashboardDataset; cohort: Cohort; filters: Filters; selectionFilters: Filters; dispatch: Dispatch<FilterAction>}) {
   return <section className="upcoming-section" aria-labelledby="patterns-heading">
     <div className="section-headline">
       <div><div className="section-eyebrow">02 / EXPLORE THE PATTERNS</div><h2 id="patterns-heading" className="content-heading">Beyond the numbers</h2></div>
@@ -81,16 +92,16 @@ function ChartsSection({dataset, cohort, filters, dispatch}: {dataset: Dashboard
     <div className="chart-grid">
       <section className="viz-card" aria-labelledby="map-heading">
         <div className="viz-heading"><span className="future-icon"><MapPinned size={19} aria-hidden="true" /></span><div><h3 id="map-heading">Geographic distribution</h3><p>Seller origins & customer destinations</p></div></div>
-        <UiErrorBoundary area="map"><BrazilMap index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
+        <UiErrorBoundary area="map"><MemoBrazilMap index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
       </section>
       <section className="viz-card" aria-labelledby="trend-heading">
         <div className="viz-heading"><span className="future-icon"><BarChart3 size={19} aria-hidden="true" /></span><div><h3 id="trend-heading">Delivery trends</h3><p>Historical order volume and punctuality</p></div></div>
-        <UiErrorBoundary area="trends"><DeliveryTrends index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
+        <UiErrorBoundary area="trends"><MemoDeliveryTrends index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
       </section>
     </div>
     <section className="viz-card viz-sankey" aria-labelledby="flow-heading">
       <div className="viz-heading"><span className="future-icon"><GitBranch size={19} aria-hidden="true" /></span><div><h3 id="flow-heading">Where orders originate—and where they go</h3><p>Top 15 seller-to-customer state relationships</p></div></div>
-      <UiErrorBoundary area="sankey"><ShippingSankey cohort={cohort} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
+      <UiErrorBoundary area="sankey"><MemoShippingSankey cohort={cohort} filters={filters} selectionFilters={selectionFilters} dispatch={dispatch}/></UiErrorBoundary>
     </section>
   </section>;
 }
@@ -117,6 +128,21 @@ function filterActionCode(action:FilterAction):UserActionCode {
   }
 }
 
+/** Keep large-dataset analytics off the urgent checkbox/click render. Small fixtures remain
+ * synchronous, while full-data selections coalesce into one analytical update. The timer is
+ * canceled on every new input, so the last selection wins and never loses an action. */
+export function useSettledFilters(filters: Filters, orderCount: number, delayMs = 120): [Filters, boolean] {
+  const [settled, setSettled] = useState(filters);
+  const largeDataset = orderCount >= 10000;
+  useEffect(() => {
+    if (!largeDataset) return;
+    const handle = window.setTimeout(() => setSettled(filters), delayMs);
+    return () => window.clearTimeout(handle);
+  }, [filters, largeDataset, delayMs]);
+  if (!largeDataset) return [filters, false];
+  return [settled, settled !== filters];
+}
+
 export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
   const [filters, baseDispatch] = useReducer(filterReducer, { ...DEFAULT_FILTERS });
   // Log only discrete user-initiated actions, not React render/effect cycles or raw filter values.
@@ -124,18 +150,19 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
     recordUserAction(filterActionCode(action),action.type.includes('flow')?'sankey':'dashboard');
     baseDispatch(action);
   },[baseDispatch]);
+  const [analyticalFilters, updating] = useSettledFilters(filters, dataset.index.orders.length);
   // Measure pure computations without notifying diagnostics subscribers during React render.
   const globalResult = useMemo(() => {
     const start = clockNow();
-    const value = selectCohort(dataset.index,filters);
+    const value = selectCohort(dataset.index,analyticalFilters);
     return {value, ms:clockNow()-start};
-  }, [dataset.index, filters.purchaseDateFrom, filters.purchaseDateTo, filters.customerStates, filters.sellerStates, filters.categories]);
+  }, [dataset.index, analyticalFilters.purchaseDateFrom, analyticalFilters.purchaseDateTo, analyticalFilters.customerStates, analyticalFilters.sellerStates, analyticalFilters.categories]);
   const contextCohort = globalResult.value;
   const focusResult = useMemo(() => {
     const start = clockNow();
-    const value = selectFocusedFlowCohort(contextCohort,filters.focusedFlows);
+    const value = selectFocusedFlowCohort(contextCohort,analyticalFilters.focusedFlows);
     return {value, ms:clockNow()-start};
-  }, [contextCohort,filters.focusedFlows]);
+  }, [contextCohort,analyticalFilters.focusedFlows]);
   const cohort = focusResult.value;
   const metricResult = useMemo(() => {
     const start = clockNow();
@@ -155,19 +182,19 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
   const options = useMemo(() => deriveFilterOptions(dataset), [dataset]);
 
   return <>
-    <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} />
+    <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} updating={updating} />
     <SavedViews filters={filters} dispatch={dispatch} />
-    {metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
+    {!updating && metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
     {filters.focusedFlows.length ? <div className="flow-focus-banner" role="status"><strong>{filters.focusedFlows.length} focused {filters.focusedFlows.length===1?'flow':'flows'}</strong><span>KPIs, trends, and order explorer include any selected directed pair, but count each matching order once. Sankey and map retain context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
-    <KpiCards metrics={metrics} cohort={cohort} />
-    <UiErrorBoundary area="analytics"><PeriodComparisonPanel index={dataset.index} filters={filters} metrics={metrics} /></UiErrorBoundary>
-    <ChartsSection dataset={dataset} cohort={contextCohort} filters={filters} dispatch={dispatch} />
+    <MemoKpiCards metrics={metrics} cohort={cohort} />
+    <UiErrorBoundary area="analytics"><MemoPeriodComparison index={dataset.index} filters={analyticalFilters} metrics={metrics} /></UiErrorBoundary>
+    <ChartsSection dataset={dataset} cohort={contextCohort} filters={analyticalFilters} selectionFilters={filters} dispatch={dispatch} />
     <section className="upcoming-section advanced-section" aria-labelledby="advanced-heading">
       <div className="section-headline"><div><div className="section-eyebrow">03 / DEEPER DELIVERY INTELLIGENCE</div><h2 id="advanced-heading" className="content-heading">Explore the details</h2></div><span className="workunit-label">Category mix · Calendar-day delays</span></div>
-      <div className="advanced-grid"><CategoryLeaderboard cohort={cohort}/><DelayDistributionChart cohort={cohort}/></div>
+      <div className="advanced-grid"><MemoCategoryLeaderboard cohort={cohort}/><MemoDelayDistribution cohort={cohort}/></div>
     </section>
     <CsvExportButton cohort={cohort}/>
-    <UiErrorBoundary area="orders"><OrderExplorer index={dataset.index} cohort={cohort} filters={filters} /></UiErrorBoundary>
+    <UiErrorBoundary area="orders"><MemoOrderExplorer index={dataset.index} cohort={cohort} filters={analyticalFilters} /></UiErrorBoundary>
     <DataFootnote dataset={dataset} />
   </>;
 }

@@ -18,6 +18,9 @@ from datetime import date
 import hashlib
 import json
 import math
+import os
+import shutil
+import uuid
 from pathlib import Path
 import tempfile
 from typing import Iterator
@@ -156,17 +159,62 @@ def scalar(conn, query: str) -> int:
 
 
 def write_json(path: Path, payload: object) -> int:
+    """Replace one asset only after a complete serialization; clean up on failure.
+
+    This is atomic PER FILE, not a multi-file transaction. A mid-export process
+    termination may still leave a mixed generation. Do not treat successful
+    writes here as proof of cross-file consistency.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False) as f:
-        candidate = Path(f.name)
-        try:
-            json.dump(payload, f, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
-            f.write("\n")
-        except BaseException:
+    candidate: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent,
+            prefix=path.name + ".", suffix=".tmp", delete=False,
+        ) as stream:
+            candidate = Path(stream.name)
+            json.dump(payload, stream, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            stream.write("\n")
+            stream.flush()
+        candidate.replace(path)
+        return path.stat().st_size
+    finally:
+        if candidate is not None:
             candidate.unlink(missing_ok=True)
-            raise
-    candidate.replace(path)
-    return path.stat().st_size
+
+
+
+def publish_dataset(output_dir: Path, orders: object, items: object, manifest: dict) -> dict[str, int]:
+    """Publish an entire immutable generation, then atomically switch one pointer.
+
+    A failed write or process kill before current.json is replaced leaves the
+    previously published generation in use. Orphan staging directories can be
+    safely removed after an interrupted run. Existing legacy flat datasets are
+    still readable by the frontend when no pointer exists.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generation = uuid.uuid4().hex
+    generations = output_dir / 'generations'
+    generations.mkdir(parents=True, exist_ok=True)
+    stage = output_dir / ('.stage-' + generation)
+    stage.mkdir()
+    published = generations / generation
+    files = ('orders.json', 'items.json', 'metadata.json')
+    payloads = (orders, items, manifest)
+    try:
+        sizes = {name: write_json(stage / name, payload) for name, payload in zip(files, payloads)}
+        checksums = {name: digest(stage / name) for name in files}
+        stage.replace(published)
+        # The pointer is deliberately the last write. It is the commit record.
+        write_json(output_dir / 'current.json', {
+            'formatVersion': 1,
+            'generation': generation,
+            'sha256': checksums,
+        })
+        return sizes
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)
 
 
 def prepare(source: Path, output_dir: Path) -> dict:
@@ -322,11 +370,7 @@ def prepare(source: Path, output_dir: Path) -> dict:
         "sourceArchiveSha256": archive_hash,
         "sourceFileSha256": checksums,
     }
-    sizes = {
-        "orders.json": write_json(output_dir / "orders.json", orders),
-        "items.json": write_json(output_dir / "items.json", items),
-        "metadata.json": write_json(output_dir / "metadata.json", manifest),
-    }
+    sizes = publish_dataset(output_dir, orders, items, manifest)
     report = {"manifest": manifest, "exportBytes": sizes}
     print(json.dumps(report, indent=2, ensure_ascii=False))
     return report
