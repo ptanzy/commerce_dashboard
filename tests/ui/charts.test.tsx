@@ -35,6 +35,7 @@ describe('WU-05 contextual map',()=>{
   it('toggles multiple seller states and preserves destination selections', async()=>{
     mockGeo();
     render(<DashboardContent dataset={dataset}/>);
+    fireEvent.click(screen.getByRole('button',{name:'Filters & Views'}));
     expect(screen.getByRole('button',{name:'Seller origins'})).toHaveAttribute('aria-pressed','true');
     const origins=within(await screen.findByRole('group',{name:'Seller origins state selection'}));
     fireEvent.click(origins.getByRole('button',{name:/SP São Paulo/}));
@@ -80,7 +81,9 @@ describe('WU-05 contextual trend and non-destructive Sankey focus',()=>{
     expect(document.querySelectorAll('.sankey-ribbon-dim').length).toBeGreaterThan(0);
     fireEvent.mouseLeave(selection);
     fireEvent.click(selection);
-    // Main filter panel displays one summary chip.
+    // Expand the unified panel to inspect the full filter summary.
+    fireEvent.click(screen.getByRole('button',{name:'Filters & Views'}));
+    fireEvent.click(screen.getByRole('button',{name:/Filters Active/}));
     expect(screen.getByRole('button', {
       name: 'Clear 1 focused flow filter'
     })).toBeInTheDocument();
@@ -103,6 +106,7 @@ describe('WU-05 contextual trend and non-destructive Sankey focus',()=>{
     mockGeo();
     render(<DashboardContent dataset={dataset}/>);
     // Match only SP origins and books (books are sold from RJ in fixture).
+    fireEvent.click(screen.getByRole('button',{name:'Filters & Views'}));
     const seller=screen.getByLabelText('Seller origins');fireEvent.click(seller);
     fireEvent.click(screen.getByRole('checkbox',{name:'Seller origins: SP · São Paulo'}));
     const cats=screen.getByLabelText('Product categories');fireEvent.click(cats);

@@ -180,10 +180,8 @@ export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:
   const closeOrder = () => setSelectedOrderId(null);
   const currentPage = safePage+1;
   return <section id="order-explorer" className="orders-section" aria-labelledby="orders-heading">
-    <div className="section-headline"><div><div className="section-eyebrow">03 / INSPECT THE RECORDS</div><h2 id="orders-heading" className="content-heading">Behind every delivery</h2></div>
-      <span className="metric-note">One row per eligible order · Matching-item charges</span></div>
     <div className="panel order-explorer-panel">
-      <div className="order-toolbar"><div><h3>Order explorer</h3><p>Selections in the map, trends and flows narrow these results automatically.</p></div>
+      <div className="order-toolbar"><div><h2 id="orders-heading">Order Explorer</h2><p>Selections in the map, trends and flows narrow these results automatically.</p></div>
         <label className="order-search"><Search size={16} aria-hidden="true"/><span className="sr-only">Search order ID</span>
           <input aria-label="Search order ID" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Find order ID…" type="search" /></label></div>
       <div className="order-table-meta" role="status" aria-live="polite">Showing {formatInteger(filteredRows.length)} of {formatInteger(cohort.eligibleOrders.length)} eligible orders{search.trim() ? ' matching ID search' : ''}</div>

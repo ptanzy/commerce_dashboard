@@ -5,6 +5,7 @@ import type { SankeyLink, SankeyNode } from 'd3-sankey';
 import { topDirectedFlows } from '../domain/selectors';
 import type { Cohort, FlowMeasure } from '../domain/selectors';
 import type { FilterAction, Filters } from '../domain/types';
+import type { DashboardChartViews } from '../domain/dashboardWorkspace';
 import { stateLabel } from '../components/stateNames';
 import { formatInteger, formatPercentage } from '../components/format';
 import { clockNow, recordTiming, recordUserAction, setDiagnosticView } from '../observability/diagnostics';
@@ -44,13 +45,16 @@ export function makeFlowLayout(summary: ReturnType<typeof topDirectedFlows>): {n
 }
 
 /** Sankey always receives the broad global cohort, never the focused drill-down cohort. */
-export function ShippingSankey({cohort,filters,selectionFilters = filters,dispatch}: {cohort:Cohort;filters:Filters;selectionFilters?:Filters;dispatch:Dispatch<FilterAction>}) {
+export function ShippingSankey({cohort,filters,selectionFilters = filters,dispatch,view,onViewChange}: {cohort:Cohort;filters:Filters;selectionFilters?:Filters;dispatch:Dispatch<FilterAction>;
+  view?:DashboardChartViews['sankey'];onViewChange?:(value:DashboardChartViews['sankey'])=>void}) {
   const [hoveredPair,setHoveredPair] = useState<string | null>(null);
   // Button feedback is urgent. Aggregation/layout follows after the user finishes
   // a short run of metric switches; stale results remain labeled with their actual
   // measure until replacement data is ready.
-  const [measure,setMeasure] = useState<FlowMeasure>('items');
-  const [computedMeasure,setComputedMeasure] = useState<FlowMeasure>('items');
+  const [localMeasure,setLocalMeasure] = useState<FlowMeasure>('items');
+  const measure=view?.measure ?? localMeasure;
+  const chooseMeasure=(next:FlowMeasure)=>{if(view)onViewChange?.({measure:next});else setLocalMeasure(next);};
+  const [computedMeasure,setComputedMeasure] = useState<FlowMeasure>(measure);
   useEffect(() => {
     if (measure === computedMeasure) return;
     const timeout = window.setTimeout(() => setComputedMeasure(measure), 50);
@@ -77,7 +81,7 @@ export function ShippingSankey({cohort,filters,selectionFilters = filters,dispat
   return <div className="viz-body sankey-body">
     <div className="viz-controls"><span className="flow-topline"><strong>{formatWeight(summary.shownWeight,computedMeasure)}</strong> shown <span className="flow-summary-sep">/</span> <strong>{formatWeight(summary.mappableWeight,computedMeasure)}</strong> eligible mappable</span><span className="viz-meta">Top 15 directed pairs{summary.links.length > 15 ? ` + ${summary.links.length-15} selected` : ''}</span></div>
     <div className="sankey-measure-controls" role="group" aria-label="Sankey measurement">
-      {(Object.keys(MEASURES) as FlowMeasure[]).map(key=><button key={key} type="button" aria-pressed={measure===key} className={measure===key?'is-active':''} onClick={()=>{recordUserAction('SANKEY_MEASURE_CHANGED','sankey');setDiagnosticView('sankeyMeasure',key);setMeasure(key);}}>{MEASURES[key]}</button>)}
+      {(Object.keys(MEASURES) as FlowMeasure[]).map(key=><button key={key} type="button" aria-pressed={measure===key} className={measure===key?'is-active':''} onClick={()=>{recordUserAction('SANKEY_MEASURE_CHANGED','sankey');setDiagnosticView('sankeyMeasure',key);chooseMeasure(key);}}>{MEASURES[key]}</button>)}
     </div>
     {measure !== computedMeasure ? <span className="viz-meta" role="status">Updating flow measure…</span> : null}
     <p className="viz-caption">Rank and size flows by {MEASURES[computedMeasure].toLowerCase()}. Click a ribbon to focus one flow, Ctrl/Cmd-click to add or remove flows. Use the selection list below to choose several without modifiers. Hover to preview; the overview stays intact. Relationships represent matching items, not physical delivery routes.</p>

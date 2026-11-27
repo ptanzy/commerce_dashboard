@@ -1,0 +1,39 @@
+/* WU-11 compact filtering tools: a single surface, two independent kinds of saved state. */
+.filters-views {
+  position: relative; z-index: 6; margin: 12px 0;
+  border: 1px solid var(--stroke); border-radius: 11px;
+  background: var(--panel); overflow: visible;
+}
+.filters-views-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 16px 6px; }
+.filters-views-toggle { display: inline-flex; align-items: center; gap: 9px; min-height: 30px; color: var(--heading); font-weight: 750; font-size: 13px; }
+.filters-views-toggle:hover { color: var(--accent); }
+.filters-views-count { border: 1px solid var(--stroke); background: var(--panel-subtle); border-radius: 99px; padding: 3px 8px; font-size: 10px; font-weight: 600; color: var(--muted); }
+.filters-views-result { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.filters-views-active { padding: 0 16px 10px; min-height: 24px; }
+.filters-views-no-filters { color: var(--muted); font-size: 11px; }
+.filters-views .workspace-filter-context { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.filters-views .workspace-filter-disclosure { font-size: 11px; }
+.filters-views .workspace-filter-clear { margin-top: 0; }
+.filters-views .workspace-filter-details { padding-top: 10px; }
+.filters-views-content { border-top: 1px solid var(--stroke); }
+.filters-views-content[hidden] { display: none !important; }
+.filters-views .filters-panel { border: none; border-radius: 0; box-shadow: none; margin: 0; background: transparent; }
+.filters-views .filter-footer { border-bottom: 0; }
+.filters-views .filter-heading { padding-top: 17px; }
+.filters-views-controls-hidden { color: var(--muted); font-size: 12px; padding: 16px; margin: 0; }
+.filters-views-presets { border-top: 1px solid var(--stroke); }
+.filters-views-presets > summary { display: flex; align-items: center; gap: 9px; padding: 14px 20px; cursor: pointer; font-size: 12px; color: var(--heading); list-style: none; }
+.filters-views-presets > summary::-webkit-details-marker { display: none; }
+.filters-views-presets > summary::after { content: '⌄'; margin-left: auto; color: var(--muted); font-size: 17px; }
+.filters-views-presets:not([open]) > summary::after { transform: rotate(-90deg); }
+.filters-views-presets > summary > span { font-size: 11px; color: var(--muted); font-weight: 400; }
+.filters-views-presets > summary:hover { color: var(--accent); }
+.filters-views .saved-views { margin: 0; padding: 0 20px 18px; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.filters-views .saved-heading { display: none; } /* Label already appears on the enclosing disclosure. */
+@media (max-width: 640px) {
+  .filters-views-toolbar { padding: 11px 12px 5px; }
+  .filters-views-active { padding: 0 12px 10px; }
+  .filters-views-presets > summary { padding: 13px 12px; flex-wrap: wrap; }
+  .filters-views-presets > summary > span { flex-basis: 100%; margin-left: 25px; }
+  .filters-views .saved-views { padding: 0 12px 14px; }
+}

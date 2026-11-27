@@ -160,3 +160,7 @@ PASS | PARTIAL | BLOCKED
 4. Updated Node + React tests, documentation, full local build and browser checks before acceptance. No new datasets, services, or public deployment.
 
 **Gate:** All relevant analytical/React regressions and local real-source checks must pass before commit. Record deferred or unavailable checks explicitly. No WU-08 work authorized.
+
+## WU-11 — Custom dashboards and saved layouts (separately owner-authorized)
+
+See `docs/WU11_SPEC.md` for the formal post-WU-10 scope. Phase 1 defines versioned dashboard configuration, section registry, safe local persistence and Node regression tests. Phases 2–5 (visibility rendering, management UI, ordering and browser acceptance) must be performed as separately gated steps. The earlier WU-00–WU-07 requirements above are historical; the owner's current authorization to begin WU-11 Phase 1 supersedes the old stopping point, **without** changing Olist dataset rights or analytical grain semantics.

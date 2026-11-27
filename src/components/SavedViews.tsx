@@ -12,8 +12,9 @@ function initial(): SavedView[] {
   catch{return [];}
 }
 /** Explicit browser-only presets; never send saved data to a server. */
-export function SavedViews({filters,dispatch}: {filters:Filters;dispatch:Dispatch<FilterAction>}) {
+export function SavedViews({filters,dispatch,onCountChange}: {filters:Filters;dispatch:Dispatch<FilterAction>;onCountChange?:(count:number)=>void}) {
   const [views,setViews]=useState<SavedView[]>(initial);
+  useEffect(()=>onCountChange?.(views.length),[views.length,onCountChange]);
   useEffect(()=>{
     try {
       const current=window.localStorage.getItem(SAVED_VIEWS_KEY);

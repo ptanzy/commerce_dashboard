@@ -19,7 +19,8 @@
     "src/domain/savedViews.ts",
     "src/observability/diagnostics.ts",
     "src/observability/recovery.ts",
-    "src/observability/investigation.ts"
+    "src/observability/investigation.ts",
+    "src/app/dashboardWorkspaceStorage.ts"
   ],
   "exclude": [
     "node_modules",

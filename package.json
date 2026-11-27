@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs tests/orderExplorer.node.cjs tests/wu05.node.cjs tests/wu06.node.cjs tests/wu07.node.cjs tests/observability.node.cjs tests/recovery.node.cjs tests/investigation.node.cjs tests/incident_lifecycle.node.cjs tests/security.node.cjs tests/wu10_performance.node.cjs",
+    "test:node": "tsc -p tsconfig.node-tests.json && node --test tests/domain.node.cjs tests/orderExplorer.node.cjs tests/wu05.node.cjs tests/wu06.node.cjs tests/wu07.node.cjs tests/observability.node.cjs tests/recovery.node.cjs tests/investigation.node.cjs tests/incident_lifecycle.node.cjs tests/security.node.cjs tests/wu10_performance.node.cjs tests/dashboard_workspace.node.cjs tests/dashboard_workspace_management.node.cjs tests/dashboard_workspace_phase4.node.cjs",
     "test:security": "tsc -p tsconfig.node-tests.json && node --test tests/security.node.cjs",
     "security:static": "python scripts/security_scan.py",
     "security:deps": "npm audit --omit=dev",

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch } from 'react';
 import { scaleBand, scaleLinear } from 'd3-scale';
 import type { DataIndex } from '../data/indexes';
 import type { FilterAction, Filters } from '../domain/types';
+import type { DashboardChartViews } from '../domain/dashboardWorkspace';
 import { monthDateRange, monthlyTrendContext } from '../domain/selectors';
 import { formatInteger, formatPercentage } from '../components/format';
 import { clockNow, recordTiming, recordUserAction, setDiagnosticView } from '../observability/diagnostics';
@@ -10,8 +11,20 @@ import { clockNow, recordTiming, recordUserAction, setDiagnosticView } from '../
 type TrendMeasure = 'orders' | 'onTime';
 const W = 860, H = 294, L = 62, R = 18, T = 22, B = 51;
 
-export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
-  const [measure, setMeasure] = useState<TrendMeasure>('orders');
+export function DeliveryTrends({index, filters, dispatch, expandToFill = false, view, onViewChange}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>;
+  expandToFill?: boolean; view?: DashboardChartViews['trends']; onViewChange?: (value: DashboardChartViews['trends']) => void}) {
+  // When a workspace supplies a change handler, its saved view is authoritative.
+  // A standalone/preview rendering without that handler must remain interactive.
+  const [localMeasure, setLocalMeasure] = useState<TrendMeasure>(() => view?.measure ?? 'orders');
+  const measure = view && onViewChange ? view.measure : localMeasure;
+  const chooseMeasure = (next:TrendMeasure) => {
+    if (view && onViewChange) onViewChange({measure:next});
+    else setLocalMeasure(next);
+  };
+  const plotRef = useRef<HTMLDivElement>(null);
+  // Scale the chart's coordinate system to its measured plot area instead of
+  // stretching a fixed-aspect SVG (which would distort text and axis labels).
+  const [plotHeight, setPlotHeight] = useState(H);
   const contextResult=useMemo(()=>{
     const start=clockNow();return {value:monthlyTrendContext(index,filters),ms:clockNow()-start};
   },[index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.customerStates,filters.sellerStates,filters.categories]);
@@ -22,23 +35,57 @@ export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; fi
     return {value:monthlyTrendContext(index,filters,30,filters.focusedFlows),ms:clockNow()-start};
   },[index,filters.purchaseDateFrom,filters.purchaseDateTo,filters.sellerStates,filters.customerStates,filters.categories,filters.focusedFlows]);
   const focusedMonths=focusedResult?.value??null;
+  useEffect(() => {
+    const plot = plotRef.current;
+    if (!expandToFill || !months.length || !plot || typeof ResizeObserver === 'undefined') {
+      setPlotHeight(previous => previous === H ? previous : H);
+      return;
+    }
+    const media = window.matchMedia?.('(min-width: 1191px)');
+    const updateHeight = (width: number, height: number) => {
+      if (!media?.matches) {
+        setPlotHeight(previous => previous === H ? previous : H);
+        return;
+      }
+      if (width <= 0 || height <= 0) return;
+      const next = Math.max(220, Math.min(1600, Math.round(W * height / width)));
+      setPlotHeight(previous => Math.abs(previous - next) < 2 ? previous : next);
+    };
+    const resize = new ResizeObserver(entries => {
+      const box = entries[0]?.contentRect;
+      if (box) updateHeight(box.width, box.height);
+    });
+    const syncBreakpoint = () => {
+      if (!media?.matches) setPlotHeight(previous => previous === H ? previous : H);
+      else {
+        const box = plot.getBoundingClientRect();
+        updateHeight(box.width, box.height);
+      }
+    };
+    resize.observe(plot);
+    media?.addEventListener?.('change', syncBreakpoint);
+    return () => {
+      resize.disconnect();
+      media?.removeEventListener?.('change', syncBreakpoint);
+    };
+  }, [expandToFill, months.length > 0]);
   useEffect(()=>recordTiming('trend_context',contextResult.ms),[contextResult]);
   useEffect(()=>{if(focusedResult)recordTiming('trend_focus',focusedResult.ms);},[focusedResult]);
   const x = useMemo(() => scaleBand<string>().domain(months.map(m => m.month)).range([L, W-R]).paddingInner(.20).paddingOuter(.08), [months]);
   const maxOrders = Math.max(1,...months.map(m => m.distinctOrders));
-  const y = scaleLinear().domain([0, measure === 'orders' ? maxOrders * 1.08 : 1]).nice(measure === 'orders' ? 5 : 4).range([H-B,T]);
+  const y = scaleLinear().domain([0, measure === 'orders' ? maxOrders * 1.08 : 1]).nice(measure === 'orders' ? 5 : 4).range([plotHeight-B,T]);
   const selectedDates = filters.purchaseDateFrom !== null || filters.purchaseDateTo !== null;
   const selectedMonth = months.find(m => m.selected && selectedDates && filters.purchaseDateFrom === monthDateRange(m.month).from && filters.purchaseDateTo === monthDateRange(m.month).to)?.month;
   const chooseMonth = (month:string) => dispatch({type:'set_date_range', ...monthDateRange(month)});
 
   return <div className="viz-body trend-body">
     <div className="viz-controls"><div className="pill-switch" role="group" aria-label="Monthly trend metric">
-      <button type="button" aria-pressed={measure === 'orders'} className={measure === 'orders' ? 'is-active' : ''} onClick={() => {recordUserAction('TREND_MEASURE_CHANGED','trends');setDiagnosticView('trendMeasure','orders');setMeasure('orders');}}>Order volume</button>
-      <button type="button" aria-pressed={measure === 'onTime'} className={measure === 'onTime' ? 'is-active' : ''} onClick={() => {recordUserAction('TREND_MEASURE_CHANGED','trends');setDiagnosticView('trendMeasure','onTime');setMeasure('onTime');}}>On-time rate</button>
+      <button type="button" aria-pressed={measure === 'orders'} className={measure === 'orders' ? 'is-active' : ''} onClick={() => {recordUserAction('TREND_MEASURE_CHANGED','trends');setDiagnosticView('trendMeasure','orders');chooseMeasure('orders');}}>Order volume</button>
+      <button type="button" aria-pressed={measure === 'onTime'} className={measure === 'onTime' ? 'is-active' : ''} onClick={() => {recordUserAction('TREND_MEASURE_CHANGED','trends');setDiagnosticView('trendMeasure','onTime');chooseMeasure('onTime');}}>On-time rate</button>
     </div><span className="viz-meta">{months.length} historical months</span></div>
     <p className="viz-caption">The full timeline remains visible. Global filters set the context; when a flow is focused, brighter bars show its monthly orders or on-time rate. Highlighted dates filter the dashboard.</p>
     {months.length === 0 ? <div className="viz-empty" role="status">No valid historical purchase dates are available.</div> : <>
-      <div className="trend-plot"><svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${measure === 'orders' ? 'Monthly order count' : 'Monthly on-time delivery rate'} across the full historical purchase period. Selected date intervals are highlighted.`}>
+      <div className="trend-plot" ref={plotRef}><svg viewBox={`0 0 ${W} ${plotHeight}`} role="img" aria-label={`${measure === 'orders' ? 'Monthly order count' : 'Monthly on-time delivery rate'} across the full historical purchase period. Selected date intervals are highlighted.`}>
         <title>Olist {measure === 'orders' ? 'monthly order volume' : 'monthly on-time percentage'} — full date context</title>
         {y.ticks(4).map(tick => <g key={tick}><line x1={L} x2={W-R} y1={y(tick)} y2={y(tick)} className="trend-gridline"/><text x={L-12} y={y(tick)+4} className="trend-axis-label" textAnchor="end">{measure === 'orders' ? formatInteger(tick) : `${Math.round(tick*100)}%`}</text></g>)}
         {months.map((month,i) => {
@@ -51,12 +98,12 @@ export function DeliveryTrends({index, filters, dispatch}: {index: DataIndex; fi
           const sparse = (measure === 'onTime' ? month.onTimeDenominator : month.distinctOrders) < 30;
           const title = `${month.month}: ${formatInteger(month.distinctOrders)} orders; ${formatPercentage(month.onTimeRate)} on time (${formatInteger(month.onTimeDenominator)} eligible)${sparse ? '; small sample' : ''}${partialEdge ? '; edge month may be partial' : ''}${focusedMonth ? `; focused ${formatInteger(focusedMonth.distinctOrders)} orders, ${formatPercentage(focusedMonth.onTimeRate)} on time` : ''}. ${month.selected ? 'Within selected date range' : 'Outside selected date range'}`;
           return <g key={month.month}>
-            {month.selected && selectedDates ? <rect className="trend-selected-column" x={xPos-2} y={T-8} width={barWidth+4} height={H-B-T+16} rx={3}/> : null}
+            {month.selected && selectedDates ? <rect className="trend-selected-column" x={xPos-2} y={T-8} width={barWidth+4} height={plotHeight-B-T+16} rx={3}/> : null}
             {value !== null && value > 0 ? <rect x={xPos} y={from} width={barWidth} height={Math.max(1,y(0)-from)} className={`trend-bar${month.selected ? '' : ' trend-muted'}${sparse ? ' trend-sparse' : ''}${focusedMonths ? ' trend-context-bar' : ''}`} rx={Math.min(2,barWidth/3)} /> : null}
             {focusedMonths && focusedValue !== null && focusedValue > 0 ? <rect x={xPos + barWidth*0.16} y={y(focusedValue)} width={barWidth*0.68} height={Math.max(1,y(0)-y(focusedValue))} className={`trend-focus-bar${month.selected ? '' : ' trend-muted'}`} rx={Math.min(2,barWidth/3)}/> : null}
-            <rect x={xPos-2} y={T} width={barWidth+4} height={H-B-T} fill="transparent" className="trend-hit" onClick={() => chooseMonth(month.month)}><title>{title} Click to filter to this month.</title></rect>
-            {(i===0 || i===months.length-1 || i%3===0) ? <text className="trend-axis-label" x={xPos+barWidth/2} y={H-31} textAnchor="middle">{month.month.slice(5)}</text> : null}
-            {(i===0 || month.month.endsWith('-01')) ? <text className="trend-year-label" x={xPos+barWidth/2} y={H-12} textAnchor="middle">{month.month.slice(0,4)}</text> : null}
+            <rect x={xPos-2} y={T} width={barWidth+4} height={plotHeight-B-T} fill="transparent" className="trend-hit" onClick={() => chooseMonth(month.month)}><title>{title} Click to filter to this month.</title></rect>
+            {(i===0 || i===months.length-1 || i%3===0) ? <text className="trend-axis-label" x={xPos+barWidth/2} y={plotHeight-31} textAnchor="middle">{month.month.slice(5)}</text> : null}
+            {(i===0 || month.month.endsWith('-01')) ? <text className="trend-year-label" x={xPos+barWidth/2} y={plotHeight-12} textAnchor="middle">{month.month.slice(0,4)}</text> : null}
             {sparse && value !== null && value > 0 ? <circle cx={xPos+barWidth/2} cy={Math.max(T+4,from-7)} r={2.5} className="trend-low-marker"><title>Low sample: {measure === 'orders' ? month.distinctOrders : month.onTimeDenominator} observations</title></circle> : null}
           </g>;
         })}

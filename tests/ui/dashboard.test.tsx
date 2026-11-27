@@ -10,6 +10,7 @@ import { DEFAULT_FILTERS } from '../../src/domain/types';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); document.documentElement.dataset.theme = 'dark'; });
 const metricsText = (testId: string): string => screen.getByTestId(testId).textContent ?? '';
+function openFilters(){const button=screen.getByRole('button',{name:'Filters & Views'});if(button.getAttribute('aria-expanded')==='false')fireEvent.click(button);}
 
 /** Native details/summary checkbox filters; opening one never erases other selected values. */
 function choose(group: string, option: string) {
@@ -23,6 +24,7 @@ function choose(group: string, option: string) {
 describe('WU-05 dashboard, multi-select and focused cohorts', () => {
   it('defaults to all valid history and preserves zero-item orders without duplicate order counts', () => {
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     expect(metricsText('kpi-indigo')).toBe('3');
     expect(metricsText('kpi-mint')).toBe('50.0%');
     expect(metricsText('kpi-amber')).toBe('5.5 days');
@@ -32,6 +34,7 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
   });
   it('uses OR within selected origins and categories, AND across groups, with same-item matching', () => {
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     choose('Seller origins','SP · São Paulo');
     choose('Seller origins','RJ · Rio de Janeiro');
     expect(metricsText('kpi-indigo')).toBe('2');
@@ -49,6 +52,7 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
   });
   it('searches the category menu without changing selected filter values', () => {
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     const summary=screen.getByLabelText('Product categories');
     fireEvent.click(summary);
     fireEvent.change(screen.getByRole('searchbox',{name:'Search product categories'}),{target:{value:'book'}});
@@ -60,6 +64,7 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
   });
   it('supports destination AND origin combinations, individually removable chips and reset', () => {
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     choose('Customer destinations','MG · Minas Gerais');
     choose('Seller origins','SP · São Paulo');
     expect(metricsText('kpi-indigo')).toBe('1');
@@ -70,6 +75,7 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
   });
   it('keeps date range inclusive and independent of a multi-select origin', () => {
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     choose('Seller origins','RJ · Rio de Janeiro');
     fireEvent.change(screen.getByLabelText('Purchase date from'),{target:{value:'2018-03-02'}});
     fireEvent.change(screen.getByLabelText('Purchase date to'),{target:{value:'2018-03-02'}});
@@ -80,10 +86,12 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
   });
   it('summarizes multiple focused flows in the filter bar while preserving per-flow Sankey controls', () => {
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     const choices = within(screen.getByRole('group',{name:'Focus a directed seller-to-customer state pair'}));
     fireEvent.click(choices.getByRole('button',{name:/SP.*MG.*1 items/}));
     fireEvent.click(choices.getByRole('button',{name:/RJ.*SP.*1 items/}));
 
+    fireEvent.click(screen.getByRole('button',{name:/Filters Active/}));
     const filterBar = within(screen.getByRole('region',{name:'Dashboard filters'}));
     expect(filterBar.getByRole('button',{name:'Clear 2 focused flows filter'})).toBeInTheDocument();
     expect(filterBar.queryAllByRole('button',{name:/Clear Focused flow:/})).toHaveLength(0);
@@ -116,7 +124,7 @@ describe('WU-05 dashboard, multi-select and focused cohorts', () => {
 function mockResponse(json: unknown, ok = true, status = 200): Response {
   return {ok,status,json:async()=>json} as Response;
 }
-async function renderLoadedApp() { render(<App/>); await screen.findByText('Refine your view'); }
+async function renderLoadedApp() { render(<App/>); await screen.findByRole('button',{name:'Filters & Views'});openFilters(); }
 
 describe('WU-02 loading and theme retained under WU-05', () => {
   beforeEach(() => {
@@ -138,7 +146,7 @@ describe('WU-02 loading and theme retained under WU-05', () => {
   });
   it('persists light mode without disturbing chosen origins', async () => {
     const ui=render(<App/>);
-    await screen.findByText('Refine your view');
+    await screen.findByRole('button',{name:'Filters & Views'});openFilters();
     choose('Seller origins','SP · São Paulo');
     expect(metricsText('kpi-indigo')).toBe('1');
     fireEvent.click(screen.getByRole('button',{name:'Switch to light theme'}));

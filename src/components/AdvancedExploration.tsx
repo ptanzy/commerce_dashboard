@@ -7,6 +7,7 @@ import type { Cohort, Metrics } from '../domain/selectors';
 import type { Filters } from '../domain/types';
 import { categoryLeaderboard, delayDistribution, metricDelta, previousPeriod } from '../domain/exploration';
 import type { CategoryMeasure } from '../domain/exploration';
+import type { DashboardChartViews } from '../domain/dashboardWorkspace';
 import { categoryLabel } from '../domain/selectors';
 import { exportCohortCsv } from '../domain/exportCsv';
 import { formatInteger, formatPercentage, formatDays } from './format';
@@ -19,14 +20,17 @@ function showCategoryValue(row:ReturnType<typeof categoryLeaderboard>[number],me
   return metric==='orders'?formatInteger(row.distinctOrders):metric==='value'?row.itemValueBRL===null?'—':brl.format(row.itemValueBRL):
     metric==='freight'?row.freightBRL===null?'—':brl.format(row.freightBRL):formatPercentage(row.onTimeRate);
 }
-export function CategoryLeaderboard({cohort}: {cohort:Cohort}){
-  const [metric,setMetric]=useState<CategoryMeasure>('orders');
+export function CategoryLeaderboard({cohort,view,onViewChange}: {cohort:Cohort;
+  view?:DashboardChartViews['category'];onViewChange?:(value:DashboardChartViews['category'])=>void}){
+  const [localMetric,setLocalMetric]=useState<CategoryMeasure>('orders');
+  const metric=view?.measure ?? localMetric;
+  const chooseMetric=(next:CategoryMeasure)=>{if(view)onViewChange?.({measure:next});else setLocalMetric(next);};
   const rows=useMemo(()=>categoryLeaderboard(cohort,metric,10),[cohort,metric]);
   const maximum=Math.max(0,...rows.map(row=>metric==='orders'?row.distinctOrders:metric==='value'?row.itemValueBRL??0:metric==='freight'?row.freightBRL??0:row.onTimeDenominator>=30?row.onTimeRate??0:0));
   return <section className="viz-card insight-card" aria-labelledby="category-ranking-title">
     <div className="viz-heading"><span className="future-icon"><Layers3 size={18} aria-hidden="true"/></span><div><h3 id="category-ranking-title">Product category leaderboard</h3><p>Matching items · order-level performance</p></div></div>
     <div className="viz-body insight-body">
-      <div className="insight-measures" role="group" aria-label="Category ranking measurement">{(Object.keys(CATEGORY_METRICS) as CategoryMeasure[]).map(key=><button type="button" key={key} aria-pressed={metric===key} className={metric===key?'is-active':''} onClick={()=>{recordUserAction('CATEGORY_MEASURE_CHANGED','analytics');setDiagnosticView('categoryMeasure',key);setMetric(key);}}>{CATEGORY_METRICS[key]}</button>)}</div>
+      <div className="insight-measures" role="group" aria-label="Category ranking measurement">{(Object.keys(CATEGORY_METRICS) as CategoryMeasure[]).map(key=><button type="button" key={key} aria-pressed={metric===key} className={metric===key?'is-active':''} onClick={()=>{recordUserAction('CATEGORY_MEASURE_CHANGED','analytics');setDiagnosticView('categoryMeasure',key);chooseMetric(key);}}>{CATEGORY_METRICS[key]}</button>)}</div>
       {rows.length ? <ol className="category-bars">{rows.map((row,i)=>{
         const weight=metric==='orders'?row.distinctOrders:metric==='value'?row.itemValueBRL??0:metric==='freight'?row.freightBRL??0:row.onTimeDenominator>=30?row.onTimeRate??0:0;
         const eligible=metric!=='onTime'||row.onTimeDenominator>=30;

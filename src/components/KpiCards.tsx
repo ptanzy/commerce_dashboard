@@ -29,10 +29,7 @@ function KpiCard({ label, value, note, icon, tone, caption }: CardProps) {
 export function KpiCards({ metrics, cohort }: {metrics: Metrics; cohort: Cohort}) {
   return <section aria-labelledby="kpi-heading" className="metrics-section">
     <div className="section-headline">
-      <div>
-        <div className="section-eyebrow">01 / PERFORMANCE OVERVIEW</div>
-        <h2 id="kpi-heading" className="content-heading">The numbers at a glance</h2>
-      </div>
+      <h2 id="kpi-heading" className="workspace-panel-title">Executive KPIs</h2>
       <span className="metric-note">Calculated from your active filters</span>
     </div>
     <div className="kpi-grid">
@@ -57,7 +54,7 @@ export function KpiCards({ metrics, cohort }: {metrics: Metrics; cohort: Cohort}
 
 export function KpiSkeletons() {
   return <section aria-label="Loading dashboard metrics" className="metrics-section">
-    <div className="section-headline"><div><div className="section-eyebrow">01 / PERFORMANCE OVERVIEW</div><h2 className="content-heading">The numbers at a glance</h2></div></div>
+    <div className="section-headline"><h2 className="workspace-panel-title">Executive KPIs</h2></div>
     <div className="kpi-grid">{[0,1,2,3,4].map(i => <div className="kpi-card" key={i} aria-hidden="true"><div className="skeleton skeleton-icon"/><div className="skeleton skeleton-line"/><div className="skeleton skeleton-number"/><div className="skeleton skeleton-line"/></div>)}</div>
   </section>;
 }

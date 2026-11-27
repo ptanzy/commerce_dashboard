@@ -10,6 +10,7 @@ import { selectCohort } from '../domain/selectors';
 import { stateDeliveryStats } from '../domain/selectors';
 import type { StateDeliveryStats } from '../domain/selectors';
 import type { FilterAction, Filters } from '../domain/types';
+import type { DashboardChartViews } from '../domain/dashboardWorkspace';
 import { BRAZIL_STATES, stateLabel } from '../components/stateNames';
 import { formatDays, formatInteger, formatPercentage } from '../components/format';
 import { fetchWithTransientRetry, registerRecoveryHandler, retryAndVerifyHealth } from '../observability/recovery';
@@ -96,9 +97,15 @@ function useBrazilGeography(): MapStatus & {retry:()=>void} {
   return {...result,retry};
 }
 
-export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>}) {
-  const [mode, setMode] = useState<MapMode>('origin');
-  const [metric, setMetric] = useState<MapMetric>('orders');
+export function BrazilMap({index, filters, dispatch, view, onViewChange}: {index: DataIndex; filters: Filters; dispatch: Dispatch<FilterAction>;
+  view?: DashboardChartViews['geographic']; onViewChange?: (value:DashboardChartViews['geographic'])=>void}) {
+  // Optional fallback keeps isolated chart tests/embedding functional; the workspace passes a controlled view.
+  const [localMode, setLocalMode] = useState<MapMode>('origin');
+  const [localMetric, setLocalMetric] = useState<MapMetric>('orders');
+  const mode=view?.mode ?? localMode;
+  const metric=view?.metric ?? localMetric;
+  const chooseMode=(next:MapMode)=>{if(view)onViewChange?.({mode:next,metric});else setLocalMode(next);};
+  const chooseMetric=(next:MapMetric)=>{if(view)onViewChange?.({mode,metric:next});else setLocalMetric(next);};
   const geo = useBrazilGeography();
   useEffect(()=>registerRecoveryHandler('geography','retry',()=>retryAndVerifyHealth('geography',geo.retry)),[geo.retry]);
   // Ignore only the displayed dimension, so users can add another state without its count disappearing.
@@ -147,12 +154,12 @@ export function BrazilMap({index, filters, dispatch}: {index: DataIndex; filters
 
   return <div className="viz-body map-body">
     <div className="viz-controls"><div className="pill-switch" role="group" aria-label="Map geography view">
-      <button type="button" aria-pressed={mode === 'origin'} className={mode === 'origin' ? 'is-active' : ''} onClick={() => {recordUserAction('MAP_VIEW_CHANGED','map');setDiagnosticView('mapMode','origin');setMode('origin');}}>Seller origins</button>
-      <button type="button" aria-pressed={mode === 'destination'} className={mode === 'destination' ? 'is-active' : ''} onClick={() => {recordUserAction('MAP_VIEW_CHANGED','map');setDiagnosticView('mapMode','destination');setMode('destination');}}>Destinations</button>
+      <button type="button" aria-pressed={mode === 'origin'} className={mode === 'origin' ? 'is-active' : ''} onClick={() => {recordUserAction('MAP_VIEW_CHANGED','map');setDiagnosticView('mapMode','origin');chooseMode('origin');}}>Seller origins</button>
+      <button type="button" aria-pressed={mode === 'destination'} className={mode === 'destination' ? 'is-active' : ''} onClick={() => {recordUserAction('MAP_VIEW_CHANGED','map');setDiagnosticView('mapMode','destination');chooseMode('destination');}}>Destinations</button>
     </div><span className="viz-meta">27 states · {MAP_METRICS[metric]}</span></div>
     <div className="map-measure-controls" role="group" aria-label="Map measurement">
       {(Object.keys(MAP_METRICS) as MapMetric[]).map(key => <button key={key} type="button" aria-pressed={metric===key}
-        className={metric===key?'is-active':''} onClick={()=>{recordUserAction('MAP_MEASURE_CHANGED','map');setDiagnosticView('mapMeasure',key);setMetric(key);}}>{MAP_METRICS[key]}</button>)}
+        className={metric===key?'is-active':''} onClick={()=>{recordUserAction('MAP_MEASURE_CHANGED','map');setDiagnosticView('mapMeasure',key);chooseMetric(key);}}>{MAP_METRICS[key]}</button>)}
     </div>
     <p className="viz-caption">{modeExplanation} {metricDescription}</p>
     {geo.status === 'loading' ? <div className="viz-loading" role="status"><RefreshCcw size={16} className="spin-slow" aria-hidden="true"/> Loading verified state boundaries…</div> : null}

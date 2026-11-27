@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useReducer, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import type { Dispatch } from 'react';
 import {
-  ArrowDownRight, ArrowUpRight, BarChart3, CircleAlert, Database,
-  GitBranch, Globe2, Layers3, MapPinned, Moon, RefreshCcw, Sun, Truck,
+  ArrowUpRight, CircleAlert, Database, Globe2, Layers3, Moon, RefreshCcw, Sun, Truck,
 } from 'lucide-react';
 import { filterReducer } from './filterReducer';
 import { useDashboardData } from './useDashboardData';
@@ -10,20 +9,23 @@ import { useTheme } from './theme';
 import type { DashboardTheme } from './theme';
 import type { DashboardDataset } from '../data/loader';
 import { selectCohort, selectFocusedFlowCohort, computeMetrics } from '../domain/selectors';
-import type { Cohort } from '../domain/selectors';
 import type { Filters, FilterAction } from '../domain/types';
 import { DEFAULT_FILTERS } from '../domain/types';
-import { FilterPanel } from '../components/FilterPanel';
 import type { FilterOptions } from '../components/FilterPanel';
-import { KpiCards, KpiSkeletons } from '../components/KpiCards';
-import { BrazilMap } from '../charts/BrazilMap';
-import { DeliveryTrends } from '../charts/DeliveryTrends';
-import { ShippingSankey } from '../charts/ShippingSankey';
-import { OrderExplorer } from '../features/orders/OrderExplorer';
-import { SavedViews } from '../components/SavedViews';
-import { CategoryLeaderboard, DelayDistributionChart, PeriodComparisonPanel, CsvExportButton } from '../components/AdvancedExploration';
+import { FiltersAndViews } from '../components/FiltersAndViews';
+import { KpiSkeletons } from '../components/KpiCards';
+import { DashboardSectionCustomizer } from '../components/DashboardSectionCustomizer';
+import { HiddenFilterToast } from '../components/HiddenFilterToast';
+import { DashboardSections } from './DashboardSections';
+import { defaultDashboardDefinition, FULL_DASHBOARD_ID, DASHBOARD_STORAGE_KEY, DASHBOARD_STORAGE_MAX_CHARS, readDashboardDefinition } from '../domain/dashboardWorkspace';
+import { readDashboardWorkspaceStorage, writeDashboardWorkspaceStorage } from './dashboardWorkspaceStorage';
+import type { WorkspaceReadStatus } from './dashboardWorkspaceStorage';
+import { createNamedDashboard, definitionById, removeNamedDashboard, renameNamedDashboard, saveNamedDashboard, uniqueDashboardName, workspaceDraft, workspaceDraftDirty } from '../domain/dashboardWorkspaceManagement';
+import { DashboardWorkspaceControls } from '../components/DashboardWorkspaceControls';
+import type { DashboardChartViews, DashboardSectionId } from '../domain/dashboardWorkspace';
+import { moveDashboardSection, shiftDashboardSection } from '../domain/dashboardSectionOrdering';
+import { CsvExportButton } from '../components/AdvancedExploration';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel';
-import { UiErrorBoundary } from '../observability/UiErrorBoundary';
 import { registerRecoveryHandler, retryAndVerifyHealth } from '../observability/recovery';
 import { clockNow, recordTiming, recordUserAction, setBuildInfo, setRuntimeEnvironment, updateDashboardState } from '../observability/diagnostics';
 import type { UserActionCode } from '../observability/diagnostics';
@@ -72,40 +74,6 @@ export function deriveFilterOptions(dataset: DashboardDataset): FilterOptions {
   };
 }
 
-// Stable analytical props should not force unrelated expensive charts to render
-// when a checkbox or flow receives its immediate UI update.
-const MemoBrazilMap = memo(BrazilMap);
-const MemoDeliveryTrends = memo(DeliveryTrends);
-const MemoShippingSankey = memo(ShippingSankey);
-const MemoKpiCards = memo(KpiCards);
-const MemoPeriodComparison = memo(PeriodComparisonPanel);
-const MemoCategoryLeaderboard = memo(CategoryLeaderboard);
-const MemoDelayDistribution = memo(DelayDistributionChart);
-const MemoOrderExplorer = memo(OrderExplorer);
-
-function ChartsSection({dataset, cohort, filters, selectionFilters, dispatch}: {dataset: DashboardDataset; cohort: Cohort; filters: Filters; selectionFilters: Filters; dispatch: Dispatch<FilterAction>}) {
-  return <section className="upcoming-section" aria-labelledby="patterns-heading">
-    <div className="section-headline">
-      <div><div className="section-eyebrow">02 / EXPLORE THE PATTERNS</div><h2 id="patterns-heading" className="content-heading">Beyond the numbers</h2></div>
-      <div className="charts-heading-actions"><span className="workunit-label">Interactive geography · Monthly trends · State-to-state flows</span><a className="explore-orders-link" href="#order-explorer">View matching orders <ArrowDownRight size={15} aria-hidden="true" /></a></div>
-    </div>
-    <div className="chart-grid">
-      <section className="viz-card" aria-labelledby="map-heading">
-        <div className="viz-heading"><span className="future-icon"><MapPinned size={19} aria-hidden="true" /></span><div><h3 id="map-heading">Geographic distribution</h3><p>Seller origins & customer destinations</p></div></div>
-        <UiErrorBoundary area="map"><MemoBrazilMap index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
-      </section>
-      <section className="viz-card" aria-labelledby="trend-heading">
-        <div className="viz-heading"><span className="future-icon"><BarChart3 size={19} aria-hidden="true" /></span><div><h3 id="trend-heading">Delivery trends</h3><p>Historical order volume and punctuality</p></div></div>
-        <UiErrorBoundary area="trends"><MemoDeliveryTrends index={dataset.index} filters={filters} dispatch={dispatch}/></UiErrorBoundary>
-      </section>
-    </div>
-    <section className="viz-card viz-sankey" aria-labelledby="flow-heading">
-      <div className="viz-heading"><span className="future-icon"><GitBranch size={19} aria-hidden="true" /></span><div><h3 id="flow-heading">Where orders originate—and where they go</h3><p>Top 15 seller-to-customer state relationships</p></div></div>
-      <UiErrorBoundary area="sankey"><MemoShippingSankey cohort={cohort} filters={filters} selectionFilters={selectionFilters} dispatch={dispatch}/></UiErrorBoundary>
-    </section>
-  </section>;
-}
-
 function DataFootnote({ dataset }: {dataset: DashboardDataset}) {
   return <aside className="data-footnote" aria-label="About this dataset">
     <div className="footnote-icon"><Database size={21} aria-hidden="true" /></div>
@@ -128,29 +96,197 @@ function filterActionCode(action:FilterAction):UserActionCode {
   }
 }
 
+let dashboardIdSequence=0;
+function freshDashboardId():string {
+  dashboardIdSequence+=1;
+  const uuid=globalThis.crypto?.randomUUID?.();
+  return uuid?'dashboard-'+uuid.replace(/-/g,'').slice(0,26):`dashboard-${Date.now()}-${dashboardIdSequence}`;
+}
+
 /** Keep large-dataset analytics off the urgent checkbox/click render. Small fixtures remain
  * synchronous, while full-data selections coalesce into one analytical update. The timer is
  * canceled on every new input, so the last selection wins and never loses an action. */
-export function useSettledFilters(filters: Filters, orderCount: number, delayMs = 120): [Filters, boolean] {
-  const [settled, setSettled] = useState(filters);
+export function useSettledFilters(filters: Filters, orderCount: number, delayMs = 120, resetKey = ''): [Filters, boolean] {
+  const [settled, setSettled] = useState({filters,resetKey});
   const largeDataset = orderCount >= 10000;
   useEffect(() => {
     if (!largeDataset) return;
-    const handle = window.setTimeout(() => setSettled(filters), delayMs);
+    if(settled.resetKey!==resetKey){setSettled({filters,resetKey});return;}
+    const handle = window.setTimeout(() => setSettled({filters,resetKey}), delayMs);
     return () => window.clearTimeout(handle);
-  }, [filters, largeDataset, delayMs]);
-  if (!largeDataset) return [filters, false];
-  return [settled, settled !== filters];
+  }, [filters, largeDataset, delayMs, resetKey]);
+  if (!largeDataset || settled.resetKey!==resetKey) return [filters, false];
+  return [settled.filters, settled.filters !== filters];
 }
 
 export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
-  const [filters, baseDispatch] = useReducer(filterReducer, { ...DEFAULT_FILTERS });
+  const [initialWorkspace] = useState(() => readDashboardWorkspaceStorage(window.localStorage));
+  const [workspace,setWorkspace] = useState(initialWorkspace.workspace);
+  const [storageStatus,setStorageStatus] = useState<WorkspaceReadStatus>(initialWorkspace.status);
+  const initialDefinition=definitionById(initialWorkspace.workspace,initialWorkspace.workspace.activeDashboardId) ?? defaultDashboardDefinition();
+  const [previewDefinition,setPreviewDefinition] = useState(() => workspaceDraft(initialDefinition,initialDefinition.analysis.filters));
+  const [filters, baseDispatch] = useReducer(filterReducer,initialDefinition.analysis.filters,
+    current => filterReducer(DEFAULT_FILTERS,{type:'restore_filters',filters:current}));
+  const [workspaceError,setWorkspaceError] = useState<string|null>(initialWorkspace.status==='ready'||initialWorkspace.status==='empty'?null:
+    'Saved dashboard storage could not be safely read. Existing data has not been overwritten.');
+  const [remoteChanged,setRemoteChanged] = useState(false);
+  const filterPanelVisible=previewDefinition.layout.filterPanelVisible;
+  const committedDefinition=definitionById(workspace,workspace.activeDashboardId) ?? defaultDashboardDefinition();
+  const draftDefinition=useMemo(()=>workspaceDraft(previewDefinition,filters),[previewDefinition,filters]);
+  const workspaceDirty=workspaceDraftDirty(committedDefinition,draftDefinition);
+  // A blocked/malformed storage record must not be silently replaced by an empty workspace.
+  const storageBlocked=storageStatus!=='empty'&&storageStatus!=='ready';
+  const persistWorkspace=useCallback((next:typeof workspace):boolean=>{
+    if(storageBlocked||remoteChanged){setWorkspaceError('Saved dashboards are unavailable or changed in another tab. Resolve this before writing.');return false;}
+    const result=writeDashboardWorkspaceStorage(window.localStorage,next);
+    if(!result.ok){setWorkspaceError(result.reason==='oversize'?'Dashboard storage limit reached. Nothing was saved.':
+      result.reason==='invalid'?'Invalid dashboard configuration. Nothing was saved.':'Browser storage is unavailable or full. Nothing was saved.');return false;}
+    setWorkspace(next);setStorageStatus('ready');setWorkspaceError(null);return true;
+  },[storageBlocked,remoteChanged]);
+  const activateDashboard=useCallback((definition:typeof previewDefinition)=>{
+    // Chart preferences are now controlled by the dashboard definition, not transient chart-local state.
+    setPreviewDefinition(workspaceDraft(definition,definition.analysis.filters));
+    baseDispatch({type:'restore_filters',filters:definition.analysis.filters});
+    setHiddenFilterNotice(null);
+  },[]);
+  const saveWorkspace=useCallback(():boolean=>{
+    if(workspace.activeDashboardId===FULL_DASHBOARD_ID){setWorkspaceError('The Full Dashboard is protected. Create or duplicate it to save your changes.');return false;}
+    const result=saveNamedDashboard(workspace,draftDefinition,new Date().toISOString());
+    if(!result.ok){setWorkspaceError('Dashboard changes could not be validated. Nothing was saved.');return false;}
+    if(!persistWorkspace(result.workspace))return false;
+    setPreviewDefinition(result.dashboard);
+    return true;
+  },[workspace,draftDefinition,persistWorkspace]);
+  const discardWorkspace=useCallback(()=>activateDashboard(committedDefinition),[activateDashboard,committedDefinition]);
+  const createWorkspace=useCallback((name:string,fromCurrent:boolean):boolean=>{
+    if(workspaceDirty&&!fromCurrent){setWorkspaceError('Save or discard current changes before starting a blank dashboard.');return false;}
+    const source=fromCurrent?draftDefinition:defaultDashboardDefinition();
+    const id=freshDashboardId();
+    const result=createNamedDashboard(workspace,source,name,id,new Date().toISOString());
+    if(!result.ok){setWorkspaceError(`Unable to create dashboard (${result.reason}).`);return false;}
+    if(!persistWorkspace(result.workspace))return false;
+    activateDashboard(result.dashboard);return true;
+  },[workspace,workspaceDirty,draftDefinition,persistWorkspace,activateDashboard]);
+  const duplicateWorkspace=useCallback(():boolean=>{
+    return createWorkspace(uniqueDashboardName(workspace,`${previewDefinition.name} copy`),true);
+  },[workspace,previewDefinition.name,createWorkspace]);
+  const renameWorkspace=useCallback((name:string):boolean=>{
+    const result=renameNamedDashboard(workspace,workspace.activeDashboardId,name,new Date().toISOString());
+    if(!result.ok){setWorkspaceError(`Unable to rename dashboard (${result.reason}).`);return false;}
+    if(!persistWorkspace(result.workspace))return false;
+    setPreviewDefinition(previous=>({...previous,name:result.dashboard.name}));return true;
+  },[workspace,persistWorkspace]);
+  const switchWorkspace=useCallback((targetId:string,choice?:'save'|'discard'):boolean=>{
+    const target=definitionById(workspace,targetId);
+    if(!target){setWorkspaceError('Requested dashboard was not found.');return false;}
+    if(targetId===workspace.activeDashboardId)return true;
+    if(workspaceDirty&&!choice){setWorkspaceError('Save or discard your changes before switching dashboards.');return false;}
+    let next=workspace;
+    if(workspaceDirty&&choice==='save'){
+      const saved=saveNamedDashboard(workspace,draftDefinition,new Date().toISOString());
+      if(!saved.ok){setWorkspaceError('Current dashboard cannot be saved in place. Use New or Duplicate.');return false;}
+      next=saved.workspace;
+    }
+    next={...next,activeDashboardId:targetId};
+    if(!persistWorkspace(next))return false;
+    activateDashboard(definitionById(next,targetId) ?? target);return true;
+  },[workspace,workspaceDirty,draftDefinition,persistWorkspace,activateDashboard]);
+  const deleteWorkspace=useCallback(():boolean=>{
+    const result=removeNamedDashboard(workspace,workspace.activeDashboardId);
+    if(!result.ok){setWorkspaceError('The selected dashboard cannot be deleted.');return false;}
+    if(!persistWorkspace(result.workspace))return false;
+    activateDashboard(result.dashboard);return true;
+  },[workspace,persistWorkspace,activateDashboard]);
+  const exportWorkspace=useCallback(()=>{
+    const current=workspaceDraft(draftDefinition,filters);
+    if(current.id===FULL_DASHBOARD_ID)return;
+    const safe=readDashboardDefinition(current);
+    if(!safe){setWorkspaceError('Invalid dashboard configuration cannot be exported.');return;}
+    const blob=new Blob([JSON.stringify(safe,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=url;link.download='commerce-dashboard-'+safe.id+'.json';
+    document.body.appendChild(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),0);
+  },[draftDefinition,filters]);
+  const importWorkspace=useCallback(async(file:File)=>{
+    if(workspaceDirty){setWorkspaceError('Save or discard your current dashboard changes before importing.');return;}
+    if(file.size>DASHBOARD_STORAGE_MAX_CHARS*4){setWorkspaceError('Dashboard import is too large.');return;}
+    try{
+      const raw=await file.text();
+      if(raw.length>DASHBOARD_STORAGE_MAX_CHARS){setWorkspaceError('Dashboard import exceeds the maximum size.');return;}
+      const validated=readDashboardDefinition(JSON.parse(raw) as unknown);
+      if(!validated){setWorkspaceError('Unsupported or malformed dashboard file. Nothing was imported.');return;}
+      const id=freshDashboardId();
+      const name=uniqueDashboardName(workspace,validated.name);
+      const result=createNamedDashboard(workspace,validated,name,id,new Date().toISOString());
+      if(!result.ok){setWorkspaceError(`Unable to import dashboard (${result.reason}).`);return;}
+      if(persistWorkspace(result.workspace))activateDashboard(result.dashboard);
+    }catch{setWorkspaceError('Unable to read dashboard JSON. No changes were made.');}
+  },[workspace,workspaceDirty,persistWorkspace,activateDashboard]);
+  const reloadWorkspace=useCallback(():boolean=>{
+    if(workspaceDirty){setWorkspaceError('Discard or save your local edits before reloading another tab’s changes.');return false;}
+    const result=readDashboardWorkspaceStorage(window.localStorage);
+    if(result.status!=='ready'&&result.status!=='empty'){
+      setWorkspaceError('Unable to reload saved dashboards; their existing storage was preserved.');return false;
+    }
+    setWorkspace(result.workspace);setStorageStatus(result.status);setRemoteChanged(false);setWorkspaceError(null);
+    activateDashboard(definitionById(result.workspace,result.workspace.activeDashboardId) ?? defaultDashboardDefinition());return true;
+  },[workspaceDirty,activateDashboard]);
+  useEffect(()=>{
+    const listener=(event:StorageEvent)=>{
+      if(event.key===DASHBOARD_STORAGE_KEY||event.key===null)setRemoteChanged(true);
+    };
+    window.addEventListener('storage',listener);
+    return()=>window.removeEventListener('storage',listener);
+  },[]);
+  const [hiddenFilterNotice,setHiddenFilterNotice] = useState<{key:number;message:string}|null>(null);
+  const notifyHiddenActiveFilters=useCallback((message:string)=>{
+    setHiddenFilterNotice(previous=>({key:(previous?.key??0)+1,message}));
+  },[]);
+  const dismissHiddenFilterNotice=useCallback(()=>setHiddenFilterNotice(null),[]);
+  const togglePreviewSection=useCallback((id:DashboardSectionId,visible:boolean)=>{
+    setPreviewDefinition(previous=>{
+      const hidden=new Set(previous.layout.hiddenSections);
+      if(visible) hidden.delete(id); else hidden.add(id);
+      return {...previous,layout:{...previous.layout,hiddenSections:previous.layout.sectionOrder.filter(section=>hidden.has(section))}};
+    });
+    if (!visible) {
+      const hasGeographic=filters.sellerStates.length>0 || filters.customerStates.length>0;
+      const hasDate=filters.purchaseDateFrom!==null || filters.purchaseDateTo!==null;
+      const notice=id==='shippingSankey'&&filters.focusedFlows.length>0?'Sankey hidden.':
+        id==='geographicDistribution'&&hasGeographic?'Geographic distribution hidden.':
+        id==='deliveryTrends'&&hasDate?'Delivery trends hidden.':
+        id==='categoryLeaderboard'&&filters.categories.length>0?'Category analysis hidden.':null;
+      if(notice)notifyHiddenActiveFilters(notice);
+    }
+  },[filters,notifyHiddenActiveFilters]);
+  const shiftPreviewSection=useCallback((id:DashboardSectionId,direction:-1|1)=>{
+    setPreviewDefinition(previous=>({...previous,layout:{...previous.layout,
+      sectionOrder:shiftDashboardSection(previous.layout.sectionOrder,id,direction)}}));
+  },[]);
+  const dragPreviewSection=useCallback((moving:DashboardSectionId,target:DashboardSectionId)=>{
+    setPreviewDefinition(previous=>({...previous,layout:{...previous.layout,
+      sectionOrder:moveDashboardSection(previous.layout.sectionOrder,moving,previous.layout.sectionOrder.indexOf(target))}}));
+  },[]);
+  const updateChartView=useCallback(<K extends keyof DashboardChartViews,>(key:K,value:DashboardChartViews[K])=>{
+    setPreviewDefinition(previous=>({...previous,analysis:{...previous.analysis,
+      views:{...previous.analysis.views,[key]:value}}}));
+  },[]);
+  const toggleFilterPanel=useCallback((visible:boolean)=>{
+    setPreviewDefinition(previous=>({...previous,layout:{...previous.layout,filterPanelVisible:visible}}));
+    if(!visible && (filters.sellerStates.length||filters.customerStates.length||filters.categories.length||
+      filters.focusedFlows.length||filters.purchaseDateFrom!==null||filters.purchaseDateTo!==null))
+      notifyHiddenActiveFilters('Filter controls hidden.');
+  },[filters,notifyHiddenActiveFilters]);
+  const resetPreviewSections=useCallback(()=>{
+    setPreviewDefinition(previous=>({...previous,layout:{...previous.layout,hiddenSections:[],filterPanelVisible:true}}));
+    setHiddenFilterNotice(null);
+  },[]);
   // Log only discrete user-initiated actions, not React render/effect cycles or raw filter values.
   const dispatch=useCallback<Dispatch<FilterAction>>((action)=>{
     recordUserAction(filterActionCode(action),action.type.includes('flow')?'sankey':'dashboard');
     baseDispatch(action);
   },[baseDispatch]);
-  const [analyticalFilters, updating] = useSettledFilters(filters, dataset.index.orders.length);
+  const [analyticalFilters, updating] = useSettledFilters(filters, dataset.index.orders.length,120,workspace.activeDashboardId);
   // Measure pure computations without notifying diagnostics subscribers during React render.
   const globalResult = useMemo(() => {
     const start = clockNow();
@@ -182,19 +318,23 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
   const options = useMemo(() => deriveFilterOptions(dataset), [dataset]);
 
   return <>
-    <FilterPanel filters={filters} dispatch={dispatch} options={options} matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} updating={updating} />
-    <SavedViews filters={filters} dispatch={dispatch} />
+    <HiddenFilterToast notice={hiddenFilterNotice} onDismiss={dismissHiddenFilterNotice}/>
+    <DashboardWorkspaceControls layoutEditor={<DashboardSectionCustomizer sectionOrder={previewDefinition.layout.sectionOrder} hiddenSections={previewDefinition.layout.hiddenSections}
+      onToggle={togglePreviewSection} onReset={resetPreviewSections} onShift={shiftPreviewSection} onMove={dragPreviewSection}
+      filterPanelVisible={filterPanelVisible} onToggleFilterPanel={toggleFilterPanel} />}
+      visibleCount={previewDefinition.layout.sectionOrder.length-previewDefinition.layout.hiddenSections.length}
+      dashboards={workspace.dashboards} activeId={workspace.activeDashboardId}
+      dirty={workspaceDirty} error={workspaceError} remoteChanged={remoteChanged} storageBlocked={storageBlocked}
+      onSwitch={switchWorkspace} onSave={saveWorkspace} onDiscard={discardWorkspace} onCreate={createWorkspace}
+      onDuplicate={duplicateWorkspace} onRename={renameWorkspace} onDelete={deleteWorkspace}
+      onImport={importWorkspace} onExport={exportWorkspace} onReload={reloadWorkspace}/>
+    <FiltersAndViews filters={filters} dispatch={dispatch} options={options}
+      matchedCount={metrics.distinctOrders} totalCount={dataset.index.orders.length} updating={updating}
+      filterPanelVisible={filterPanelVisible} onShowFilterPanel={()=>toggleFilterPanel(true)} />
     {!updating && metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
-    {filters.focusedFlows.length ? <div className="flow-focus-banner" role="status"><strong>{filters.focusedFlows.length} focused {filters.focusedFlows.length===1?'flow':'flows'}</strong><span>KPIs, trends, and order explorer include any selected directed pair, but count each matching order once. Sankey and map retain context.</span><button type="button" onClick={()=>dispatch({type:'clear_flow_focus'})}>Clear flow focus</button></div> : null}
-    <MemoKpiCards metrics={metrics} cohort={cohort} />
-    <UiErrorBoundary area="analytics"><MemoPeriodComparison index={dataset.index} filters={analyticalFilters} metrics={metrics} /></UiErrorBoundary>
-    <ChartsSection dataset={dataset} cohort={contextCohort} filters={analyticalFilters} selectionFilters={filters} dispatch={dispatch} />
-    <section className="upcoming-section advanced-section" aria-labelledby="advanced-heading">
-      <div className="section-headline"><div><div className="section-eyebrow">03 / DEEPER DELIVERY INTELLIGENCE</div><h2 id="advanced-heading" className="content-heading">Explore the details</h2></div><span className="workunit-label">Category mix · Calendar-day delays</span></div>
-      <div className="advanced-grid"><MemoCategoryLeaderboard cohort={cohort}/><MemoDelayDistribution cohort={cohort}/></div>
-    </section>
+    <DashboardSections key={workspace.activeDashboardId} definition={previewDefinition} dataset={dataset} cohort={cohort} contextCohort={contextCohort}
+      metrics={metrics} analyticalFilters={analyticalFilters} selectionFilters={filters} dispatch={dispatch} onChartViewChange={updateChartView}/>
     <CsvExportButton cohort={cohort}/>
-    <UiErrorBoundary area="orders"><MemoOrderExplorer index={dataset.index} cohort={cohort} filters={analyticalFilters} /></UiErrorBoundary>
     <DataFootnote dataset={dataset} />
   </>;
 }

@@ -642,3 +642,92 @@ h1,h2,h3 { font-family:'Segoe UI',Arial,system-ui,sans-serif; }
 .developer-investigation-view button {border:1px solid var(--stroke-strong);border-radius:7px;padding:6px 10px;background:var(--panel);color:var(--text);cursor:pointer;}
 .developer-investigation-view button[aria-pressed="true"] {font-weight:700;border-color:var(--heading);}
 .developer-investigation-history-link:focus-visible,.developer-investigation-view button:focus-visible {outline:2px solid var(--heading);outline-offset:2px;}
+
+/* WU-11 Phase 2: temporary, accessible section-visibility preview. */
+.workspace-customizer {margin:13px 0 3px;border:1px solid var(--stroke);border-radius:11px;background:var(--panel);padding:14px 18px;}
+.workspace-customizer-top,.workspace-customizer-description,.workspace-customizer-footer {display:flex;align-items:center;justify-content:space-between;gap:13px;}
+.workspace-customizer-description {justify-content:flex-start;}
+.workspace-customizer-description>svg {color:var(--accent);flex-shrink:0;}
+.workspace-customizer-description strong {color:var(--heading);font-size:12px;}
+.workspace-customizer-description p,.workspace-customizer-footer span {font-size:11px;color:var(--muted);line-height:1.5;margin-top:3px;}
+.workspace-customizer-action,.workspace-customizer-reset {display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 11px;border:1px solid var(--stroke);border-radius:8px;background:var(--panel-subtle);color:var(--heading);font-size:11px;font-weight:750;white-space:nowrap;}
+.workspace-customizer-action:hover,.workspace-customizer-reset:hover:not(:disabled) {border-color:var(--accent);}
+.workspace-customizer-reset:disabled {opacity:.5;cursor:not-allowed;}
+.workspace-section-options {margin-top:15px;padding-top:15px;border-top:1px solid var(--stroke);}
+.workspace-section-options legend {font-size:12px;color:var(--heading);font-weight:700;margin-bottom:10px;}
+.workspace-section-options-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 16px;}
+.workspace-section-option {display:flex;align-items:center;gap:9px;color:var(--text);font-size:11px;min-width:0;cursor:pointer;}
+.workspace-section-option input {accent-color:var(--accent);width:16px;height:16px;flex-shrink:0;cursor:pointer;}
+.workspace-customizer-footer {margin-top:14px;align-items:flex-start;}
+.workspace-chart-grid>.workspace-wide-section {grid-column:1/-1;}
+.workspace-chart-grid .viz-sankey {margin-top:0;}
+.workspace-chart-grid.workspace-single-chart,.advanced-grid.workspace-single-advanced {grid-template-columns:minmax(0,1fr);}
+.workspace-chart-grid .workspace-section-slot {min-width:0;}
+.workspace-empty {margin:30px 0;padding:45px 22px;text-align:center;background:var(--panel);border:1px dashed var(--stroke-strong);border-radius:12px;color:var(--muted);}
+.workspace-empty svg {color:var(--accent);margin:0 auto 9px;}
+.workspace-empty h2 {color:var(--heading);font-weight:700;font-size:17px;}
+.workspace-empty p {margin:8px auto 0;max-width:540px;font-size:12px;line-height:1.6;}
+@media(max-width:650px){.workspace-customizer-top,.workspace-customizer-footer{align-items:stretch;flex-direction:column;}.workspace-section-options-grid{grid-template-columns:1fr;}.workspace-customizer-action{width:100%;}}
+
+/* WU-11 Phase 2B: paired cards stretch within a grid row even with section wrappers. */
+.workspace-chart-grid > .workspace-section-slot,
+.advanced-grid > .workspace-section-slot { min-width:0; display:flex; flex-direction:column; }
+.workspace-chart-grid > .workspace-section-slot > .viz-card,
+.advanced-grid > .workspace-section-slot > .viz-card { flex:1 1 auto; width:100%; }
+
+/* Persistent compact filter context and visibility-only warning. */
+.workspace-filter-context { border:1px solid var(--stroke);border-radius:10px;background:var(--panel);margin:12px 0;padding:10px 14px; }
+.workspace-filter-context-top {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.workspace-filter-disclosure {display:inline-flex;align-items:center;gap:8px;color:var(--heading);font-size:12px;font-weight:750;padding:4px 1px;}
+.workspace-filter-disclosure:hover {color:var(--accent);}
+.workspace-filter-count {border:1px solid var(--stroke);background:var(--panel-subtle);border-radius:99px;padding:2px 7px;color:var(--muted);font-size:10px;}
+.workspace-filter-inactive {font-size:11px;color:var(--muted);}
+.workspace-filter-show,.workspace-filter-clear {padding:7px 9px;color:var(--heading);font-weight:700;font-size:11px;border:1px solid var(--stroke);background:var(--panel-subtle);border-radius:7px;}
+.workspace-filter-show:hover,.workspace-filter-clear:hover {border-color:var(--accent);}
+.workspace-filter-details {border-top:1px solid var(--stroke);margin-top:10px;padding-top:12px;}
+.workspace-filter-details p {font-size:11px;color:var(--muted);margin-bottom:9px;}
+.workspace-filter-details ul {display:flex;flex-wrap:wrap;gap:7px;list-style:none;margin:0;padding:0;}
+.workspace-filter-details li {display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:5px 7px 5px 10px;background:var(--panel-subtle);color:var(--text);border:1px solid var(--stroke);border-radius:7px;font-size:11px;}
+.workspace-filter-details li span {overflow-wrap:anywhere;}
+.workspace-filter-details li button {display:flex;align-items:center;justify-content:center;min-width:20px;min-height:20px;border-radius:4px;}
+.workspace-filter-details li button:hover {background:var(--stroke);}
+.workspace-filter-clear {margin-top:10px;}
+.workspace-filter-visibility {margin-top:14px;padding-top:13px;border-top:1px solid var(--stroke);}
+.workspace-filter-visibility legend {color:var(--heading);font-size:12px;font-weight:700;}
+.workspace-filter-visibility p {margin-top:5px;color:var(--muted);font-size:11px;}
+.workspace-filter-toast {position:fixed;top:74px;right:20px;z-index:140;max-width:min(380px,calc(100vw - 40px));display:flex;align-items:flex-start;gap:10px;padding:13px;border:1px solid var(--stroke-strong);border-left:3px solid var(--accent);border-radius:9px;background:var(--panel);box-shadow:0 8px 30px var(--shadow);color:var(--text);font-size:12px;line-height:1.5;}
+.workspace-filter-toast>svg {flex-shrink:0;color:var(--accent);margin-top:1px;}
+.workspace-filter-toast strong {color:var(--heading);}
+.workspace-filter-toast button {margin-left:auto;display:flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;border-radius:5px;}
+.workspace-filter-toast button:hover {background:var(--panel-subtle);}
+@media(max-width:650px){.workspace-filter-toast{top:64px;right:12px;max-width:calc(100vw - 24px);}}
+
+/* WU-11 Phase 2C: use paired-card height for the chart, not for stretched SVG text.
+   Only the two-column desktop geography + trends pairing opts in. */
+@media (min-width:1191px) {
+  .workspace-geo-trend-pair > [data-dashboard-section="deliveryTrends"] > .viz-card {
+    display:flex;
+    flex-direction:column;
+  }
+  .workspace-geo-trend-pair .trend-body {
+    display:flex;
+    flex:1 1 auto;
+    min-height:0;
+    flex-direction:column;
+  }
+  .workspace-geo-trend-pair .trend-plot {
+    display:flex;
+    flex:1 1 294px;
+    min-height:220px;
+    max-height:620px;
+    min-width:0;
+  }
+  .workspace-geo-trend-pair .trend-plot svg {
+    width:100%;
+    height:100%;
+  }
+  .workspace-geo-trend-pair .trend-bottom,
+  .workspace-geo-trend-pair .viz-smallprint {
+    flex-shrink:0;
+  }
+}

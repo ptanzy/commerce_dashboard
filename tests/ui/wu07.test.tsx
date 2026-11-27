@@ -13,6 +13,7 @@ const topology={type:'Topology',transform:{scale:[0.001,0.001],translate:[-75,-3
   arcs:codes.map((_,i)=>[[i*8,0],[5,0],[0,5],[-5,0],[0,-5]])};
 beforeEach(()=>vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,json:async()=>topology} as Response))));
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();window.localStorage.clear();});
+const openFilters=()=>fireEvent.click(screen.getByRole('button',{name:'Filters & Views'}));
 
 describe('WU-07 advanced exploration',()=>{
   it('focuses multiple exact directed flows through the accessible flow list, without shrinking the Sankey',()=>{
@@ -27,6 +28,7 @@ describe('WU-07 advanced exploration',()=>{
     expect(second).toHaveAttribute('aria-pressed','true');
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('2');
     expect(choices.getAllByRole('button')).toHaveLength(count);
+    fireEvent.click(screen.getByRole('button',{name:/Filters Active/}));
     expect(screen.getByRole('button',{name:'Remove focused flow SP→MG'})).toBeInTheDocument();
     expect(document.querySelectorAll('.sankey-ribbon-dim').length).toBeGreaterThan(0);
     fireEvent.click(first);
@@ -52,6 +54,7 @@ describe('WU-07 advanced exploration',()=>{
     fireEvent.click(second,{ctrlKey:true});
     expect(first).toHaveAttribute('aria-pressed','true');
     expect(second).toHaveAttribute('aria-pressed','true');
+    openFilters();
     expect(screen.getByRole('button',{name:'Clear 2 focused flows filter'})).toBeInTheDocument();
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('2');
     fireEvent.click(second,{ctrlKey:true});
@@ -80,6 +83,7 @@ describe('WU-07 advanced exploration',()=>{
   });
   it('previous-period comparisons only appear for two dates with a full available preceding period',()=>{
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
     const panel=screen.getByRole('region',{name:'Previous-period comparison'});
     expect(within(panel).getByText(/Set both purchase dates/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Purchase date from'),{target:{value:'2018-03-03'}});
@@ -89,6 +93,8 @@ describe('WU-07 advanced exploration',()=>{
   });
   it('saves, restores, renames and deletes filter views in local browser storage',()=>{
     render(<DashboardContent dataset={dataset}/>);
+    openFilters();
+    fireEvent.click(screen.getByText('Saved filter views'));
     const views=within(screen.getByRole('region',{name:'Saved filter views'}));
     const name=views.getByRole('textbox',{name:'Saved view name'});
     fireEvent.change(name,{target:{value:'SP sellers'}});

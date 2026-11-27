@@ -261,3 +261,8 @@ npm run dev
 ```
 
 Validate on the real local Olist files, confirm the browser layout in both themes and a narrow viewport, and review the staged files before committing. **Do not stage `data/raw/`, `public/data/`, or privately generated source-derived record files.** Detailed feature and acceptance contracts: [`docs/WU07_SPEC.md`](docs/WU07_SPEC.md) and [`docs/WU07_HANDOFF.md`](docs/WU07_HANDOFF.md). WU-05/WU-06 singular-focus descriptions are historical; this extension supersedes them.
+
+
+## WU-11 — Custom dashboard workspaces (Phase 1 foundation)
+
+Versioned dashboard configuration, strict validation and browser-only persistence contracts are defined in [`docs/WU11_SPEC.md`](docs/WU11_SPEC.md). The active dashboard UI is **unchanged** in Phase 1; section visibility and saved dashboard management arrive in later gated phases.
