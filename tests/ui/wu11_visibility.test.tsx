@@ -23,7 +23,7 @@ function expandWorkspace(){
 }
 
 describe('WU-11 Phase 2 conditional section rendering',()=>{
-  it('starts with the original eight visible panels and has no implicit workspace writes',()=>{
+  it('starts with all twelve visible panels and has no implicit workspace writes',()=>{
     render(<DashboardContent dataset={dataset}/>);
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('3');
     expect(screen.getByRole('heading',{name:'Geographic distribution'})).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('WU-11 Phase 2 conditional section rendering',()=>{
   it('supports the all-hidden state without losing global services, and restores the default',()=>{
     render(<DashboardContent dataset={dataset}/>);
     const editor=openEditor();
-    for(const label of ['Executive KPIs','Previous-period comparison','Geographic distribution','Delivery trends','Shipping Sankey','Category leaderboard','Delivery timing distribution','Order Explorer']) toggle(editor,label);
+    for(const label of ['Executive KPIs','Previous-period comparison','Geographic distribution','Delivery trends','Shipping Sankey','Category leaderboard','Delivery timing distribution','Order Explorer','Fulfillment lifecycle','Shipping corridor scorecard','Seller performance','Customer experience & satisfaction']) toggle(editor,label);
     expect(screen.getByRole('heading',{name:'No analytical sections are visible'})).toBeInTheDocument();
     expect(screen.queryByTestId('kpi-indigo')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading',{name:'Beyond the numbers'})).not.toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('WU-11 Phase 2 conditional section rendering',()=>{
   it('keeps the saved section order, even when sections cross original group boundaries',()=>{
     const first=defaultDashboardDefinition();
     first.layout.sectionOrder=[...DASHBOARD_SECTION_IDS].reverse();
-    first.layout.hiddenSections=['geographicDistribution','deliveryTrends','shippingSankey','categoryLeaderboard','delayDistribution'];
+    first.layout.hiddenSections=['geographicDistribution','deliveryTrends','shippingSankey','categoryLeaderboard','delayDistribution','fulfillmentLifecycle','shippingCorridorScorecard','sellerPerformance','customerExperience'];
     const global=selectCohort(dataset.index,DEFAULT_FILTERS);
     const cohort=selectFocusedFlowCohort(global,[]);
     const {container}=render(<DashboardSections definition={first} dataset={dataset} contextCohort={global} cohort={cohort}

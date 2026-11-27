@@ -2,7 +2,7 @@ import { DASHBOARD_SECTION_IDS } from './dashboardWorkspace';
 import type { DashboardSectionId } from './dashboardWorkspace';
 
 /** Presentation grouping only; does not affect which analytical sections are selected. */
-export type DashboardSectionGroup = 'kpis' | 'comparison' | 'charts' | 'advanced' | 'orders';
+export type DashboardSectionGroup = 'kpis' | 'comparison' | 'charts' | 'advanced' | 'orders' | 'operations';
 export interface DashboardSectionBlock {
   group: DashboardSectionGroup;
   sections: DashboardSectionId[];
@@ -17,6 +17,10 @@ const GROUP_BY_SECTION: Readonly<Record<DashboardSectionId, DashboardSectionGrou
   categoryLeaderboard: 'advanced',
   delayDistribution: 'advanced',
   orderExplorer: 'orders',
+  fulfillmentLifecycle: 'operations',
+  shippingCorridorScorecard: 'operations',
+  sellerPerformance: 'operations',
+  customerExperience: 'operations',
 };
 
 /**

@@ -3,7 +3,7 @@
 
 Usage: python scripts/prepare_data.py --input data/raw/olist.zip --output public/data
 Run from repo root. Requirements: Python 3.12+; pip install -r requirements-etl.txt.
-Only the SIX required business CSVs are extracted or read. No geolocation processing.
+Six required CSVs plus the optional reviews CSV are processed. No geolocation processing. Review comments are never exported.
 """
 from __future__ import annotations
 
@@ -40,7 +40,9 @@ INPUTS = {
     "products": ("olist_products_dataset.csv", {"product_id", "product_category_name"}),
     "translations": ("product_category_name_translation.csv", {"product_category_name", "product_category_name_english"}),
 }
-PROCESSING_VERSION = "wu01-duckdb-1"
+REVIEWS_FILENAME = "olist_order_reviews_dataset.csv"
+REVIEW_COLUMNS = {"order_id", "review_id", "review_score"}
+PROCESSING_VERSION = "wu12-customer-experience-1"
 STATES = set("AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split())
 
 # WU-09: bounded ingestion protects the local ETL from malicious/broken archives.
@@ -102,6 +104,16 @@ def input_paths(source: Path) -> Iterator[tuple[dict[str, Path], str | None]]:
             total_bytes += size
             if total_bytes > MAX_TOTAL_REQUIRED_CSV_BYTES:
                 raise ValueError("Required CSVs exceed the allowed total size")
+        review_path = source / REVIEWS_FILENAME
+        if review_path.exists() or review_path.is_symlink():
+            if not review_path.is_file() or review_path.is_symlink():
+                raise ValueError("Unsafe optional reviews CSV")
+            if review_path.stat().st_size > MAX_SOURCE_CSV_BYTES:
+                raise ValueError("Optional reviews CSV exceeds the allowed size")
+            total_bytes += review_path.stat().st_size
+            if total_bytes > MAX_TOTAL_REQUIRED_CSV_BYTES:
+                raise ValueError("Input CSVs exceed the allowed total size")
+            paths["reviews"] = review_path
         yield paths, None
         return
     if not source.is_file() or not source.suffix.lower() == ".zip":
@@ -128,14 +140,38 @@ def input_paths(source: Path) -> Iterator[tuple[dict[str, Path], str | None]]:
             if total_bytes > MAX_TOTAL_REQUIRED_CSV_BYTES:
                 raise ValueError("Required CSVs exceed the allowed total size")
             paths[name] = target
+        matches = [entry for entry in members if not entry.is_dir() and Path(entry.filename).name == REVIEWS_FILENAME]
+        if len(matches) > 1:
+            raise ValueError("Ambiguous reviews CSV in archive")
+        if matches:
+            info = matches[0]
+            safe_zip_entry(info)
+            target = Path(tmp) / REVIEWS_FILENAME
+            with archive.open(info) as inp, target.open("wb") as out:
+                actual_size = copy_csv_bounded(inp, out)
+            total_bytes += actual_size
+            if total_bytes > MAX_TOTAL_REQUIRED_CSV_BYTES:
+                raise ValueError("Input CSVs exceed the allowed total size")
+            paths["reviews"] = target
         yield paths, digest(source)
+
+
+def optional_order_milestone_projection(columns: set[str]) -> tuple[str, str]:
+    """Return allowlisted milestone SQL expressions, tolerating older fixture schemas.
+
+    Raw Olist CSVs normally include these fields; legacy export fixtures may not.
+    Identifiers are fixed literals and never incorporate untrusted CSV header strings.
+    """
+    approved = "o.order_approved_at" if "order_approved_at" in columns else "NULL"
+    carrier = "o.order_delivered_carrier_date" if "order_delivered_carrier_date" in columns else "NULL"
+    return approved, carrier
 
 
 def validate_headers(paths: dict[str, Path]) -> None:
     for name, path in paths.items():
         with path.open("r", encoding="utf-8-sig", newline="") as source:
             columns = set(next(csv.reader(source), []))
-        missing = INPUTS[name][1] - columns
+        missing = (REVIEW_COLUMNS if name == "reviews" else INPUTS[name][1]) - columns
         if missing:
             raise ValueError(f"{path.name}: missing required columns {sorted(missing)}")
 
@@ -217,6 +253,32 @@ def publish_dataset(output_dir: Path, orders: object, items: object, manifest: d
             shutil.rmtree(stage)
 
 
+def aggregate_review_scores(review_rows, order_ids: set[str], invalid: Counter) -> dict[str, list[int]]:
+    """Validate, deduplicate and aggregate reviews without ever exporting free text."""
+    review_counts: dict[str, list[int]] = {}
+    if review_rows is not None:
+        seen_reviews: set[tuple[str, str]] = set()
+        for order_id, review_id, score_raw in review_rows:
+            if order_id not in order_ids:
+                invalid["orphanReviewRows"] += 1
+                continue
+            if not isinstance(review_id, str) or not review_id.strip():
+                invalid["invalidReviewRows"] += 1
+                continue
+            key = (order_id, review_id)
+            if key in seen_reviews:
+                invalid["duplicateReviewRows"] += 1
+                continue
+            score = (score_raw or "").strip()
+            if score not in ("1", "2", "3", "4", "5"):
+                invalid["invalidReviewRows"] += 1
+                continue
+            seen_reviews.add(key)
+            counts = review_counts.setdefault(order_id, [0, 0, 0, 0, 0])
+            counts[int(score) - 1] += 1
+    return review_counts
+
+
 def prepare(source: Path, output_dir: Path) -> dict:
     try:
         import duckdb
@@ -225,7 +287,7 @@ def prepare(source: Path, output_dir: Path) -> dict:
 
     with input_paths(source) as (paths, archive_hash):
         validate_headers(paths)
-        checksums = {INPUTS[name][0]: digest(path) for name, path in paths.items()}
+        checksums = {(REVIEWS_FILENAME if name == "reviews" else INPUTS[name][0]): digest(path) for name, path in paths.items()}
         conn = duckdb.connect(database=":memory:")
         try:
             # All-varchar source prevents silent type inference altering IDs or malformed dates.
@@ -247,8 +309,14 @@ def prepare(source: Path, output_dir: Path) -> dict:
                 "itemsWithoutProduct": scalar(conn, "SELECT COUNT(*) FROM items i LEFT JOIN products p ON i.product_id=p.product_id WHERE p.product_id IS NULL"),
             }
             # Join table cardinalities checked *before* joining; order grain remains stable.
-            order_rows = conn.execute("""
+            order_columns = {row[0] for row in conn.execute("DESCRIBE orders").fetchall()}
+            approved_expr, carrier_expr = optional_order_milestone_projection(order_columns)
+            approved_source_available = "order_approved_at" in order_columns
+            carrier_source_available = "order_delivered_carrier_date" in order_columns
+            order_rows = conn.execute(f"""
                 SELECT o.order_id, o.order_status, o.order_purchase_timestamp,
+                       {approved_expr} AS approved_raw,
+                       {carrier_expr} AS carrier_raw,
                        o.order_delivered_customer_date, o.order_estimated_delivery_date,
                        c.customer_state, COALESCE(ic.item_count, 0) AS item_count
                 FROM orders o
@@ -267,6 +335,10 @@ def prepare(source: Path, output_dir: Path) -> dict:
                 LEFT JOIN products p ON i.product_id=p.product_id
                 LEFT JOIN translations t ON p.product_category_name=t.product_category_name
             """).fetchall()
+            # Review rows are read separately, never joined into the order/item
+            # export: Olist can have multiple reviews per order, and joining them
+            # would inflate delivery and financial metrics.
+            review_rows = conn.execute("SELECT order_id, review_id, review_score FROM reviews").fetchall() if "reviews" in paths else None
             source_orders = scalar(conn, "SELECT COUNT(*) FROM orders")
             source_items = scalar(conn, "SELECT COUNT(*) FROM items")
         finally:
@@ -278,14 +350,20 @@ def prepare(source: Path, output_dir: Path) -> dict:
         raise AssertionError("Item join cardinality changed unexpectedly")
 
     invalid = Counter()
+    order_ids = {row[0] for row in order_rows}
+    review_counts = aggregate_review_scores(review_rows, order_ids, invalid)
     orders: list[dict] = []
-    for order_id, status_raw, purchase_raw, actual_raw, estimated_raw, state_raw, item_count in order_rows:
+    for order_id, status_raw, purchase_raw, approved_raw, carrier_raw, actual_raw, estimated_raw, state_raw, item_count in order_rows:
         purchase = parse_source_timestamp(purchase_raw)
+        approved = parse_source_timestamp(approved_raw)
+        carrier = parse_source_timestamp(carrier_raw)
         actual = parse_source_timestamp(actual_raw)
         estimate = parse_source_calendar_date(estimated_raw)
         status = (status_raw or "").strip().lower()
         state = (state_raw or "").strip().upper() or None
         if purchase is None: invalid["invalidPurchaseTimestamps"] += 1
+        if approved_raw and approved is None: invalid["invalidApprovedTimestamps"] += 1
+        if carrier_raw and carrier is None: invalid["invalidCarrierHandoffTimestamps"] += 1
         if actual_raw and actual is None: invalid["invalidDeliveredTimestamps"] += 1
         if estimated_raw and estimate is None: invalid["invalidEstimatedDates"] += 1
         if status == "delivered" and actual is None: invalid["deliveredMissingActual"] += 1
@@ -295,7 +373,7 @@ def prepare(source: Path, output_dir: Path) -> dict:
             invalid["invalidCustomerStates"] += 1
             state = None
         days, day_delta, classification = classify_order(status, purchase, actual, estimate)
-        orders.append({
+        order_export = {
             "orderId": order_id,
             "customerState": state,
             "purchaseDate": purchase.date().isoformat() if purchase else None,
@@ -308,7 +386,16 @@ def prepare(source: Path, output_dir: Path) -> dict:
             "deliveryDayDelta": day_delta,
             "deliveryClassification": classification,
             "itemCount": int(item_count),
-        })
+        }
+        # Preserve the difference between a source column not being available
+        # (legacy fixture) and an available column whose event value is missing.
+        if approved_source_available:
+            order_export["approvedTimestamp"] = normalized_timestamp(approved)
+        if carrier_source_available:
+            order_export["carrierHandoffTimestamp"] = normalized_timestamp(carrier)
+        if review_rows is not None and order_id in review_counts:
+            order_export["reviewScoreCounts"] = review_counts[order_id]
+        orders.append(order_export)
 
     items: list[dict] = []
     for order_id, ordinal_raw, seller_id, seller_state_raw, customer_state_raw, pt, en, price_raw, freight_raw in item_rows:
@@ -353,17 +440,22 @@ def prepare(source: Path, output_dir: Path) -> dict:
     manifest = {
         "schemaVersion": 2,
         "sourceName": "Olist Brazilian E-Commerce",
-        "sourceFiles": [filename for filename, _ in INPUTS.values()],
+        "sourceFiles": [filename for filename, _ in INPUTS.values()] + ([REVIEWS_FILENAME] if review_rows is not None else []),
         "processingVersion": PROCESSING_VERSION,
         "purchaseDateMin": min(purchase_dates) if purchase_dates else None,
         "purchaseDateMax": max(purchase_dates) if purchase_dates else None,
         "orderCount": len(orders), "itemCount": len(items),
+        "reviewsAvailable": review_rows is not None,
+        "reviewCount": sum(sum(v) for v in review_counts.values()),
+        "reviewedOrderCount": len(review_counts),
         "unmatchedJoinCounts": unmatched,
         "invalidCounts": {key: int(invalid[key]) for key in (
-            "invalidPurchaseTimestamps", "invalidDeliveredTimestamps", "invalidEstimatedDates",
+            "invalidPurchaseTimestamps", "invalidApprovedTimestamps", "invalidCarrierHandoffTimestamps",
+            "invalidDeliveredTimestamps", "invalidEstimatedDates",
             "deliveredMissingActual", "negativeDeliveryDurations", "invalidCustomerStates",
             "invalidSellerStates", "invalidItemPrice", "invalidFreightCharge",
             "unknownCategoryItems", "untranslatedCategoryItems",
+            "orphanReviewRows", "invalidReviewRows", "duplicateReviewRows",
         )},
         "provenance": "https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce (CC BY-NC-SA 4.0); local noncommercial POC",
         "sampleMode": False,

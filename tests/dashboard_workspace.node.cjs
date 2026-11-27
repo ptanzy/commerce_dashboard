@@ -20,12 +20,13 @@ function fakeStorage(initial={}) {
   return {data,getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};
 }
 
-test('WU-11 section registry represents actual eight independent analytical regions',()=>{
+test('Operational expansion registers eleven independent analytical regions',()=>{
   assert.deepEqual(DASHBOARD_SECTION_IDS,[
     'kpis','periodComparison','geographicDistribution','deliveryTrends','shippingSankey',
     'categoryLeaderboard','delayDistribution','orderExplorer',
+    'fulfillmentLifecycle','shippingCorridorScorecard','sellerPerformance','customerExperience',
   ]);
-  assert.equal(new Set(DASHBOARD_SECTIONS.map(s=>s.id)).size,8);
+  assert.equal(new Set(DASHBOARD_SECTIONS.map(s=>s.id)).size,12);
   assert.ok(DASHBOARD_SECTIONS.every(s=>s.label));
 });
 test('WU-11 built-in full dashboard is protected, unhidden and structurally independent',()=>{
@@ -150,6 +151,10 @@ test('WU-11 Phase 2 groups adjacent visualizations without reordering sections',
     {group:'charts',sections:['geographicDistribution','deliveryTrends','shippingSankey']},
     {group:'advanced',sections:['categoryLeaderboard','delayDistribution']},
     {group:'orders',sections:['orderExplorer']},
+    {group:'operations',sections:['fulfillmentLifecycle']},
+    {group:'operations',sections:['shippingCorridorScorecard']},
+    {group:'operations',sections:['sellerPerformance']},
+    {group:'operations',sections:['customerExperience']},
   ]);
   assert.deepEqual(groupDashboardSections(['shippingSankey','orderExplorer','geographicDistribution','kpis']),[
     {group:'charts',sections:['shippingSankey']},

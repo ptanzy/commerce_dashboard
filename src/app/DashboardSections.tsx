@@ -5,6 +5,7 @@ import type { DashboardDataset } from '../data/loader';
 import type { Cohort, Metrics } from '../domain/selectors';
 import type { Filters, FilterAction } from '../domain/types';
 import type { DashboardChartViews, DashboardDefinition, DashboardSectionId } from '../domain/dashboardWorkspace';
+import type { DashboardTableId, TablePageSize } from '../domain/dashboardTablePreferences';
 import { visibleDashboardSections } from '../domain/dashboardWorkspace';
 import { groupDashboardSections } from '../domain/dashboardSectionLayout';
 import { KpiCards } from '../components/KpiCards';
@@ -12,6 +13,9 @@ import { BrazilMap } from '../charts/BrazilMap';
 import { DeliveryTrends } from '../charts/DeliveryTrends';
 import { ShippingSankey } from '../charts/ShippingSankey';
 import { OrderExplorer } from '../features/orders/OrderExplorer';
+import { FulfillmentLifecyclePanel, ShippingCorridorScorecardPanel } from '../components/OperationalPanels';
+import { SellerPerformancePanel } from '../components/SellerPerformancePanel';
+import { CustomerExperiencePanel } from '../components/CustomerExperiencePanel';
 import { CategoryLeaderboard, DelayDistributionChart, PeriodComparisonPanel } from '../components/AdvancedExploration';
 import { UiErrorBoundary } from '../observability/UiErrorBoundary';
 
@@ -24,6 +28,10 @@ const MemoPeriodComparison = memo(PeriodComparisonPanel);
 const MemoCategoryLeaderboard = memo(CategoryLeaderboard);
 const MemoDelayDistribution = memo(DelayDistributionChart);
 const MemoOrderExplorer = memo(OrderExplorer);
+const MemoFulfillmentLifecycle = memo(FulfillmentLifecyclePanel);
+const MemoShippingCorridors = memo(ShippingCorridorScorecardPanel);
+const MemoSellerPerformance = memo(SellerPerformancePanel);
+const MemoCustomerExperience = memo(CustomerExperiencePanel);
 
 export interface DashboardSectionsProps {
   definition: DashboardDefinition;
@@ -35,6 +43,7 @@ export interface DashboardSectionsProps {
   selectionFilters: Filters;
   dispatch: Dispatch<FilterAction>;
   onChartViewChange?: <K extends keyof DashboardChartViews>(key: K, value: DashboardChartViews[K]) => void;
+  onTablePageSizeChange?: (table: DashboardTableId, value: TablePageSize) => void;
 }
 
 type ViewHandlers = {
@@ -48,6 +57,8 @@ type ViewHandlers = {
 function sectionContent(id: DashboardSectionId, props: DashboardSectionsProps, handlers: ViewHandlers, expandTrends = false): ReactNode {
   const {dataset,cohort,contextCohort,metrics,analyticalFilters,selectionFilters,dispatch} = props;
   const views = props.definition.analysis.views;
+  const sizes = props.definition.analysis.tablePageSizes;
+  const onSize = props.onTablePageSizeChange;
   switch(id) {
     case 'kpis': return <MemoKpiCards metrics={metrics} cohort={cohort}/>;
     case 'periodComparison': return <UiErrorBoundary area="analytics"><MemoPeriodComparison index={dataset.index} filters={analyticalFilters} metrics={metrics}/></UiErrorBoundary>;
@@ -70,7 +81,15 @@ function sectionContent(id: DashboardSectionId, props: DashboardSectionsProps, h
     case 'categoryLeaderboard': return <MemoCategoryLeaderboard cohort={cohort}
       view={views.category} onViewChange={handlers.category}/>;
     case 'delayDistribution': return <MemoDelayDistribution cohort={cohort}/>;
-    case 'orderExplorer': return <UiErrorBoundary area="orders"><MemoOrderExplorer index={dataset.index} cohort={cohort} filters={analyticalFilters}/></UiErrorBoundary>;
+    case 'orderExplorer': return <UiErrorBoundary area="orders"><MemoOrderExplorer index={dataset.index} cohort={cohort} filters={analyticalFilters}
+      pageSize={sizes.orderExplorer} onPageSizeChange={onSize ? size=>onSize('orderExplorer',size) : undefined}/></UiErrorBoundary>;
+    case 'fulfillmentLifecycle': return <UiErrorBoundary area="analytics"><MemoFulfillmentLifecycle cohort={cohort}/></UiErrorBoundary>;
+    case 'shippingCorridorScorecard': return <UiErrorBoundary area="analytics"><MemoShippingCorridors cohort={contextCohort} selectionFilters={selectionFilters} dispatch={dispatch}
+      pageSize={sizes.shippingCorridorScorecard} onPageSizeChange={onSize ? size=>onSize('shippingCorridorScorecard',size) : undefined}/></UiErrorBoundary>;
+    case 'sellerPerformance': return <UiErrorBoundary area="analytics"><MemoSellerPerformance cohort={contextCohort} allItems={dataset.index.items}
+      pageSize={sizes.sellerPerformance} onPageSizeChange={onSize ? size=>onSize('sellerPerformance',size) : undefined}/></UiErrorBoundary>;
+    case 'customerExperience': return <UiErrorBoundary area="analytics"><MemoCustomerExperience cohort={cohort} reviewsAvailable={dataset.manifest.reviewsAvailable===true}
+      pageSize={sizes.customerExperience} onPageSizeChange={onSize ? size=>onSize('customerExperience',size) : undefined}/></UiErrorBoundary>;
   }
 }
 

@@ -90,11 +90,14 @@ describe('WU-04 analytical order explorer contracts',()=>{
     expect(first).toHaveTextContent('multi');
   });
 
-  it('paginates at 25 rows without mounting all eligible orders',()=>{
+  it('paginates at 10 rows by default and supports adjustable row counts',()=>{
     const more=Array.from({length:53},(_,i)=>({...orders[2],orderId:`new-${String(i).padStart(3,'0')}`}));
     const index=buildDataIndex(more,[]);
     const cohort=selectCohort(index,filters);
     explorer(cohort,filters,index);
+    expect(orderRows()).toHaveLength(10);
+    expect(screen.getByText('Page 1 of 6')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox',{name:'Order Explorer rows per page'}),{target:{value:'25'}});
     expect(orderRows()).toHaveLength(25);
     expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Next orders page'}));

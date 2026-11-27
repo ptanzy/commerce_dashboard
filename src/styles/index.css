@@ -1,3 +1,4 @@
+@import "./wu12_operational.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -701,33 +702,3 @@ h1,h2,h3 { font-family:'Segoe UI',Arial,system-ui,sans-serif; }
 .workspace-filter-toast button {margin-left:auto;display:flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;border-radius:5px;}
 .workspace-filter-toast button:hover {background:var(--panel-subtle);}
 @media(max-width:650px){.workspace-filter-toast{top:64px;right:12px;max-width:calc(100vw - 24px);}}
-
-/* WU-11 Phase 2C: use paired-card height for the chart, not for stretched SVG text.
-   Only the two-column desktop geography + trends pairing opts in. */
-@media (min-width:1191px) {
-  .workspace-geo-trend-pair > [data-dashboard-section="deliveryTrends"] > .viz-card {
-    display:flex;
-    flex-direction:column;
-  }
-  .workspace-geo-trend-pair .trend-body {
-    display:flex;
-    flex:1 1 auto;
-    min-height:0;
-    flex-direction:column;
-  }
-  .workspace-geo-trend-pair .trend-plot {
-    display:flex;
-    flex:1 1 294px;
-    min-height:220px;
-    max-height:620px;
-    min-width:0;
-  }
-  .workspace-geo-trend-pair .trend-plot svg {
-    width:100%;
-    height:100%;
-  }
-  .workspace-geo-trend-pair .trend-bottom,
-  .workspace-geo-trend-pair .viz-smallprint {
-    flex-shrink:0;
-  }
-}

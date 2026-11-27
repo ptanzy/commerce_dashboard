@@ -1,6 +1,8 @@
 import { readFilterSnapshot } from './savedViews';
 import { DEFAULT_FILTERS } from './types';
 import type { Filters } from './types';
+import { defaultDashboardTablePageSizes, readDashboardTablePageSizes } from './dashboardTablePreferences';
+import type { DashboardTablePageSizes } from './dashboardTablePreferences';
 
 /** WU-11's stable section IDs describe existing visualizations, not user-authored components. */
 export const DASHBOARD_SECTIONS = [
@@ -12,9 +14,21 @@ export const DASHBOARD_SECTIONS = [
   { id: 'categoryLeaderboard', label: 'Category leaderboard' },
   { id: 'delayDistribution', label: 'Delivery timing distribution' },
   { id: 'orderExplorer', label: 'Order Explorer' },
+  { id: 'fulfillmentLifecycle', label: 'Fulfillment lifecycle' },
+  { id: 'shippingCorridorScorecard', label: 'Shipping corridor scorecard' },
+  { id: 'sellerPerformance', label: 'Seller performance' },
+  { id: 'customerExperience', label: 'Customer experience & satisfaction' },
 ] as const;
 export type DashboardSectionId = typeof DASHBOARD_SECTIONS[number]['id'];
 export const DASHBOARD_SECTION_IDS: readonly DashboardSectionId[] = DASHBOARD_SECTIONS.map(section => section.id);
+/** Eight-section WU-11 is revision 1; ten-section OE-2 is revision 2; seller expands to eleven in revision 3; reviews to twelve in revision 4. */
+export const DASHBOARD_LAYOUT_REVISION = 4 as const;
+export const LEGACY_DASHBOARD_SECTION_IDS: readonly DashboardSectionId[] = DASHBOARD_SECTION_IDS.slice(0,8);
+export const OPERATIONAL_DASHBOARD_SECTION_IDS: readonly DashboardSectionId[] = ['fulfillmentLifecycle','shippingCorridorScorecard'];
+export const SELLER_DASHBOARD_SECTION_IDS: readonly DashboardSectionId[] = ['sellerPerformance'];
+export const TEN_SECTION_IDS: readonly DashboardSectionId[] = DASHBOARD_SECTION_IDS.slice(0,10);
+export const ELEVEN_SECTION_IDS: readonly DashboardSectionId[] = DASHBOARD_SECTION_IDS.slice(0,11);
+export const CUSTOMER_EXPERIENCE_SECTION_IDS: readonly DashboardSectionId[] = ['customerExperience'];
 export const DASHBOARD_SCHEMA_VERSION = 1 as const;
 export const FULL_DASHBOARD_ID = 'full-dashboard';
 export const DASHBOARD_STORAGE_KEY = 'commerce-dashboard:wu11-workspaces:v1';
@@ -42,6 +56,8 @@ export interface DashboardDefinition {
     /** Same order/item-grain and exact directed-flow semantics as WU-07. */
     filters: Filters;
     views: DashboardChartViews;
+    /** Independent sizes for the four paginated tables in this saved dashboard. */
+    tablePageSizes: DashboardTablePageSizes;
   };
   updatedAt: string;
 }
@@ -87,6 +103,7 @@ export function defaultDashboardDefinition(): DashboardDefinition {
         trends: { ...VIEW_DEFAULTS.trends },
         category: { ...VIEW_DEFAULTS.category },
       },
+      tablePageSizes: defaultDashboardTablePageSizes(),
     },
     /** Sentinel for the virtual built-in dashboard, not a modification timestamp. */
     updatedAt: '1970-01-01T00:00:00.000Z',
@@ -105,11 +122,26 @@ function readLayout(input: unknown): DashboardDefinition['layout'] | null {
   // Phase 1 configurations lacked this visibility field; normalize them without rewriting storage.
   if ('filterPanelVisible' in input && typeof input.filterPanelVisible !== 'boolean') return null;
   const order = input.sectionOrder, hidden = input.hiddenSections;
-  if (!Array.isArray(order) || order.length !== DASHBOARD_SECTION_IDS.length ||
-      !order.every(isSection) || new Set(order).size !== DASHBOARD_SECTION_IDS.length ||
-      !Array.isArray(hidden) || hidden.length > DASHBOARD_SECTION_IDS.length ||
-      !hidden.every(isSection) || new Set(hidden).size !== hidden.length) return null;
-  return { sectionOrder: [...order], hiddenSections: [...hidden], filterPanelVisible: input.filterPanelVisible !== false };
+  if (!Array.isArray(order) || !Array.isArray(hidden) ||
+      !order.every(isSection) || !hidden.every(isSection) ||
+      new Set(order).size !== order.length || new Set(hidden).size !== hidden.length ||
+      hidden.some(id => !order.includes(id))) return null;
+  const completeV4 = order.length === DASHBOARD_SECTION_IDS.length &&
+    DASHBOARD_SECTION_IDS.every(id=>order.includes(id));
+  const completeV3 = order.length === ELEVEN_SECTION_IDS.length &&
+    ELEVEN_SECTION_IDS.every(id=>order.includes(id));
+  const completeV2 = order.length === TEN_SECTION_IDS.length &&
+    TEN_SECTION_IDS.every(id => order.includes(id));
+  const completeV1 = order.length === LEGACY_DASHBOARD_SECTION_IDS.length &&
+    LEGACY_DASHBOARD_SECTION_IDS.every(id => order.includes(id));
+  if (!completeV4 && !completeV3 && !completeV2 && !completeV1) return null;
+  // Upgrade layouts in memory only. New panels start hidden in historical custom
+  // dashboards; import, reload, and validation never silently persist the migration.
+  const appended = completeV1 ? [...OPERATIONAL_DASHBOARD_SECTION_IDS,...SELLER_DASHBOARD_SECTION_IDS,...CUSTOMER_EXPERIENCE_SECTION_IDS] :
+    completeV2 ? [...SELLER_DASHBOARD_SECTION_IDS,...CUSTOMER_EXPERIENCE_SECTION_IDS] :
+    completeV3 ? [...CUSTOMER_EXPERIENCE_SECTION_IDS] : [];
+  return { sectionOrder: [...order,...appended], hiddenSections: [...hidden,...appended],
+    filterPanelVisible: input.filterPanelVisible !== false };
 }
 
 function readViews(input: unknown): DashboardChartViews | null {
@@ -139,16 +171,22 @@ export function readDashboardDefinition(input: unknown): DashboardDefinition | n
   const timestamp = new Date(input.updatedAt);
   if (!Number.isFinite(timestamp.valueOf()) || timestamp.toISOString() !== input.updatedAt) return null;
   const layout = readLayout(input.layout);
-  if (!layout || !isRecord(input.analysis) || !exactKeys(input.analysis, ['filters', 'views'])) return null;
+  if (!layout || !isRecord(input.analysis) ||
+      !(exactKeys(input.analysis, ['filters', 'views']) ||
+        exactKeys(input.analysis, ['filters', 'views', 'tablePageSizes']))) return null;
   const filters = readFilterSnapshot(input.analysis.filters);
   const views = readViews(input.analysis.views);
-  if (!filters || !views) return null;
+  // Older saved dashboards did not store table preferences. Upgrade in memory
+  // without rewriting localStorage until the user explicitly chooses Save.
+  const tablePageSizes = 'tablePageSizes' in input.analysis
+    ? readDashboardTablePageSizes(input.analysis.tablePageSizes) : defaultDashboardTablePageSizes();
+  if (!filters || !views || !tablePageSizes) return null;
   return {
     schemaVersion: DASHBOARD_SCHEMA_VERSION,
     id: input.id,
     name: input.name.trim(),
     layout,
-    analysis: { filters, views },
+    analysis: { filters, views, tablePageSizes },
     updatedAt: input.updatedAt,
   };
 }

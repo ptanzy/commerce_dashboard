@@ -15,7 +15,7 @@ describe('WU-11 unified collapsible dashboard workspace',()=>{
     render(<DashboardContent dataset={dataset}/>);
     const workspace=screen.getByRole('region',{name:'Dashboard workspace manager'});
     const filters=screen.getByRole('region',{name:'Active dashboard filter context'});
-    expect(workspace).toHaveTextContent('Full Dashboard · 8 of 8 panels visible');
+    expect(workspace).toHaveTextContent('Full Dashboard · 12 of 12 panels visible');
     expect(workspace.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button',{name:'Expand Dashboard Workspace'})).toHaveAttribute('aria-expanded','false');
     expect(screen.queryByRole('list',{name:'Section order'})).not.toBeInTheDocument();
@@ -23,7 +23,7 @@ describe('WU-11 unified collapsible dashboard workspace',()=>{
     open();
     expect(screen.getByRole('button',{name:'Collapse Dashboard Workspace'})).toHaveAttribute('aria-expanded','true');
     const editor=within(screen.getByRole('list',{name:'Section order'}));
-    expect(editor.getAllByRole('checkbox')).toHaveLength(8);
+    expect(editor.getAllByRole('checkbox')).toHaveLength(12);
     expect(editor.getByRole('button',{name:'Move Delivery trends up'})).toBeInTheDocument();
     expect(screen.queryByText('Show or hide dashboard sections')).not.toBeInTheDocument();
   });
@@ -36,7 +36,7 @@ describe('WU-11 unified collapsible dashboard workspace',()=>{
     const original=[...document.querySelectorAll('[data-dashboard-section]')].map(node=>node.getAttribute('data-dashboard-section'));
     fireEvent.click(trendBox);
     expect(screen.queryByRole('heading',{name:'Delivery trends'})).not.toBeInTheDocument();
-    expect(screen.getByRole('region',{name:'Dashboard workspace manager'})).toHaveTextContent('7 of 8 panels visible');
+    expect(screen.getByRole('region',{name:'Dashboard workspace manager'})).toHaveTextContent('11 of 12 panels visible');
     fireEvent.click(editor.getByRole('button',{name:'Move Delivery trends up'}));
     fireEvent.click(trendBox);
     const reordered=[...document.querySelectorAll('[data-dashboard-section]')].map(node=>node.getAttribute('data-dashboard-section'));

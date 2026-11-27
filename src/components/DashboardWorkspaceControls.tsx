@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { ChevronDown, ChevronUp, Copy, LayoutDashboard, Plus, Save, Trash2, X } from 'lucide-react';
-import { FULL_DASHBOARD_ID } from '../domain/dashboardWorkspace';
+import { DASHBOARD_SECTION_IDS, FULL_DASHBOARD_ID } from '../domain/dashboardWorkspace';
 import type { DashboardDefinition } from '../domain/dashboardWorkspace';
 
 export interface WorkspaceControlsProps {
@@ -78,7 +78,7 @@ export function DashboardWorkspaceControls(props:WorkspaceControlsProps) {
       <button type="button" className="workspace-manager-disclosure" aria-label={expanded?'Collapse Dashboard Workspace':'Expand Dashboard Workspace'}
         aria-expanded={expanded} aria-controls="workspace-manager-content" onClick={toggleExpanded}>
         <LayoutDashboard size={18} aria-hidden="true"/>
-        <span className="workspace-manager-heading-text"><strong>Dashboard Workspace</strong><span>{active} · {props.visibleCount} of 8 panels visible</span></span>
+        <span className="workspace-manager-heading-text"><strong>Dashboard Workspace</strong><span>{active} · {props.visibleCount} of {DASHBOARD_SECTION_IDS.length} panels visible</span></span>
         <span className={`workspace-manager-state${props.dirty?' workspace-manager-unsaved':''}`}>{props.dirty?'Unsaved changes':'Saved configuration'}</span>
         {expanded?<ChevronUp size={18} aria-hidden="true"/>:<ChevronDown size={18} aria-hidden="true"/>}
       </button>

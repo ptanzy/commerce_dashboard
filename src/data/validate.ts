@@ -25,16 +25,38 @@ export function validateDataset(ordersRaw: unknown, itemsRaw: unknown, metadataR
   must(typeof metadataRaw.itemCount === 'number' && metadataRaw.itemCount === itemsRaw.length, 'item count mismatch');
   must(typeof metadataRaw.processingVersion === 'string' && metadataRaw.processingVersion.length > 0, 'missing processing version');
 
+  const reviewsAvailable = metadataRaw.reviewsAvailable === true;
+  must(metadataRaw.reviewsAvailable === undefined || typeof metadataRaw.reviewsAvailable === 'boolean', 'invalid reviews availability');
+  if (reviewsAvailable) must(typeof metadataRaw.reviewCount === 'number' && Number.isSafeInteger(metadataRaw.reviewCount) && metadataRaw.reviewCount >= 0 &&
+    typeof metadataRaw.reviewedOrderCount === 'number' && Number.isSafeInteger(metadataRaw.reviewedOrderCount) && metadataRaw.reviewedOrderCount >= 0, 'invalid review manifest counts');
+  let reviewedOrderCount = 0;
+  let reviewCount = 0;
   for (const row of ordersRaw) {
     must(isRecord(row), 'order row is not an object');
     must(typeof row.orderId === 'string' && row.orderId.length > 0, 'missing orderId');
     must(nullableString(row.customerState) && nullableString(row.purchaseDate) && nullableString(row.purchaseTimestamp), 'invalid order state/date');
     must(nullableString(row.estimatedDeliveryDate) && nullableString(row.deliveredDate) && nullableString(row.deliveredTimestamp), 'invalid delivery dates');
+    // Older WU-11 datasets legitimately omit these two optional milestones.
+    // When present they must be null or a source-naive timestamp string.
+    must((row.approvedTimestamp === undefined || nullableString(row.approvedTimestamp)) &&
+      (row.carrierHandoffTimestamp === undefined || nullableString(row.carrierHandoffTimestamp)), 'invalid fulfillment milestones');
     must(typeof row.status === 'string', 'invalid order status');
     must(nullableNonnegativeNumber(row.deliveryDays), 'invalid deliveryDays');
     must(row.deliveryDayDelta === null || (typeof row.deliveryDayDelta === 'number' && Number.isInteger(row.deliveryDayDelta)), 'invalid deliveryDayDelta');
     must(['early','on_time','late','unknown'].includes(String(row.deliveryClassification)), 'invalid delivery classification');
     must(typeof row.itemCount === 'number' && Number.isInteger(row.itemCount) && row.itemCount >= 0, 'invalid itemCount');
+    if (row.reviewScoreCounts !== undefined) {
+      must(reviewsAvailable, 'review scores without review source manifest');
+      const counts = row.reviewScoreCounts;
+      must(Array.isArray(counts) && counts.length === 5 && counts.every(v => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0), 'invalid review score counts');
+      const n = (counts as number[]).reduce((sum,v)=>sum+v,0);
+      must(Number.isSafeInteger(n) && n > 0, 'empty or excessive review score counts');
+      reviewedOrderCount++;
+      reviewCount += n;
+    }
+  }
+  if (reviewsAvailable) {
+    must(reviewedOrderCount === metadataRaw.reviewedOrderCount && reviewCount === metadataRaw.reviewCount, 'review count mismatch');
   }
   for (const row of itemsRaw) {
     must(isRecord(row), 'item row is not an object');

@@ -20,7 +20,8 @@ const decimal = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maxim
 export const formatBRL = (value: number | null): string => value === null || !Number.isFinite(value) ? '—' : money.format(value);
 const shown = (value: string | null): string => value ?? '—';
 const shownDays = (value: number | null): string => value === null || !Number.isFinite(value) ? '—' : `${decimal.format(value)} d`;
-const PAGE_SIZE = 25;
+import {TablePageSizeControl,useTablePageSize} from '../../components/TablePageSizeControl';
+import type {TablePageSize} from '../../domain/dashboardTablePreferences';
 
 // Sorting by purchase is already the default order in orders.json. Comparators always
 // have an order-ID tie break; sorting occurs only when requested by the user.
@@ -142,10 +143,14 @@ function OrderDetailDrawer({detail, onClose}: {detail: OrderDetail;onClose:()=>v
   </div>;
 }
 
-export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:Cohort;filters:Filters}) {
+export function OrderExplorer({index,cohort,filters,pageSize:configuredPageSize,onPageSizeChange}:{
+  index:DataIndex;cohort:Cohort;filters:Filters;pageSize?:TablePageSize;
+  onPageSizeChange?:(value:TablePageSize)=>void;
+}) {
+  const [pageSize,changePageSize]=useTablePageSize(configuredPageSize,onPageSizeChange);
   const [search, setSearch] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: pageSize });
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const rowsResult=useMemo(()=>{
     const start=clockNow();return {value:selectExplorerOrders(cohort),ms:clockNow()-start};
@@ -167,14 +172,15 @@ export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:
   },[filteredRows,sorting]);
   const sortedRows=sortedResult.value;
   useEffect(()=>recordTiming('explorer_sort',sortedResult.ms),[sortedResult]);
-  const pageCount = Math.max(1,Math.ceil(sortedRows.length/PAGE_SIZE));
+  const pageCount = Math.max(1,Math.ceil(sortedRows.length/pageSize));
   const safePage = Math.min(pagination.pageIndex,pageCount-1);
-  const pageRows = useMemo(() => sortedRows.slice(safePage*PAGE_SIZE,(safePage+1)*PAGE_SIZE), [sortedRows,safePage]);
+  const pageRows = useMemo(() => sortedRows.slice(safePage*pageSize,(safePage+1)*pageSize), [sortedRows,safePage,pageSize]);
   const table = useReactTable({ data: pageRows, columns, pageCount, manualPagination:true,manualSorting:true,
-    state: { sorting, pagination: {...pagination,pageIndex:safePage} },
+    state: { sorting, pagination: {...pagination,pageIndex:safePage,pageSize} },
     onSortingChange: setSorting, onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
   });
+  useEffect(()=>setPagination(current=>current.pageIndex===0?current:{...current,pageIndex:0}),[pageSize]);
   const selectedDetail = useMemo(() => selectedOrderId ? selectOrderDetail(index,cohort,filters,selectedOrderId) : null,
     [index,cohort,filters,selectedOrderId]);
   const closeOrder = () => setSelectedOrderId(null);
@@ -192,7 +198,8 @@ export function OrderExplorer({index, cohort, filters}: {index:DataIndex;cohort:
       <tbody>{table.getRowModel().rows.length ? table.getRowModel().rows.map(row=><tr key={row.original.orderId}>
         {row.getVisibleCells().map(cell=><td key={cell.id}>{cell.column.id==='action' ? <button type="button" className="order-view-button" onClick={()=>{recordUserAction('ORDER_DETAILS_OPENED','orders');setSelectedOrderId(row.original.orderId);}} aria-label={`View order ${row.original.orderId} details`}>{flexRender(cell.column.columnDef.cell,cell.getContext())}</button> : flexRender(cell.column.columnDef.cell,cell.getContext())}</td>)}
       </tr>) : <tr><td colSpan={columns.length}><div className="order-no-results"><FileSearch size={20}/><span>{search.trim() ? 'No order IDs match this search in the selected cohort.' : 'No orders match the current dashboard filters.'}</span></div></td></tr>}</tbody></table></div>
-      <div className="order-pagination"><span>{filteredRows.length ? `Rows ${formatInteger(safePage*PAGE_SIZE+1)}–${formatInteger(Math.min((safePage+1)*PAGE_SIZE,filteredRows.length))} of ${formatInteger(filteredRows.length)}` : 'No rows'} · 25 per page</span>
+      <div className="order-pagination"><span>{filteredRows.length ? `Rows ${formatInteger(safePage*pageSize+1)}–${formatInteger(Math.min((safePage+1)*pageSize,filteredRows.length))} of ${formatInteger(filteredRows.length)}` : 'No rows'}</span>
+        <TablePageSizeControl label="Order Explorer rows per page" value={pageSize} onChange={size=>{setPagination({pageIndex:0,pageSize:size});changePageSize(size);}}/>
         <div className="page-controls"><button type="button" aria-label="Previous orders page" disabled={!table.getCanPreviousPage()} onClick={()=>table.previousPage()}><ChevronLeft size={18}/></button><span>Page {currentPage} of {pageCount}</span><button type="button" aria-label="Next orders page" disabled={!table.getCanNextPage()} onClick={()=>table.nextPage()}><ChevronRight size={18}/></button></div>
       </div>
     </div>

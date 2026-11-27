@@ -5,6 +5,7 @@ import {act,cleanup,fireEvent,render,screen,within} from '@testing-library/react
 import {DashboardContent} from '../../src/app/App';
 import {HiddenFilterToast} from '../../src/components/HiddenFilterToast';
 import {dataset} from './fixtures';
+import {DASHBOARD_SECTION_IDS} from '../../src/domain/dashboardWorkspace';
 
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();window.localStorage.clear();window.sessionStorage.clear();});
 
@@ -48,7 +49,7 @@ describe('WU-11 Phase 2B persistent filter context and hide-only warnings',()=>{
     expect(screen.getByTestId('kpi-indigo')).toHaveTextContent('1');
     fireEvent.click(screen.getByRole('button',{name:'Show filter controls'}));
     expect(screen.getByRole('region',{name:'Dashboard filters'})).toBeInTheDocument();
-    expect(editor.getAllByRole('checkbox').length).toBe(8);
+    expect(editor.getAllByRole('checkbox')).toHaveLength(DASHBOARD_SECTION_IDS.length);
   });
 
   it('warns when hiding a focused Sankey and keeps that exact directed flow even after it unmounts',()=>{

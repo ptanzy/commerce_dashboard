@@ -6,6 +6,9 @@ export interface OrderFact {
   customerState: string | null;
   purchaseDate: string | null;
   purchaseTimestamp: string | null;
+  /** Optional in pre-WU-12 exports. Source-naive, never converted to a timezone. */
+  approvedTimestamp?: string | null;
+  carrierHandoffTimestamp?: string | null;
   estimatedDeliveryDate: string | null;
   deliveredDate: string | null;
   deliveredTimestamp: string | null;
@@ -14,6 +17,12 @@ export interface OrderFact {
   deliveryDayDelta: number | null;
   deliveryClassification: DeliveryClassification;
   itemCount: number;
+  /** Optional privacy-preserving 1–5 score counts, one bucket per star rating.
+   *  The source review file may have multiple reviews for one order; never
+   *  duplicate the order in cohorts. Undefined means no reviews for this order
+   *  or a legacy export. The manifest distinguishes those cases.
+   */
+  reviewScoreCounts?: [number, number, number, number, number];
 }
 export interface ItemFact {
   orderId: string;
@@ -34,6 +43,10 @@ export interface DataManifest {
   purchaseDateMax: string | null;
   orderCount: number;
   itemCount: number;
+  /** Reviews are optional in historical exports; only aggregated scores are retained. */
+  reviewsAvailable?: boolean;
+  reviewCount?: number;
+  reviewedOrderCount?: number;
   unmatchedJoinCounts: Record<string, number>;
   invalidCounts: Record<string, number>;
   provenance: string;

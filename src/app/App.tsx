@@ -23,6 +23,7 @@ import type { WorkspaceReadStatus } from './dashboardWorkspaceStorage';
 import { createNamedDashboard, definitionById, removeNamedDashboard, renameNamedDashboard, saveNamedDashboard, uniqueDashboardName, workspaceDraft, workspaceDraftDirty } from '../domain/dashboardWorkspaceManagement';
 import { DashboardWorkspaceControls } from '../components/DashboardWorkspaceControls';
 import type { DashboardChartViews, DashboardSectionId } from '../domain/dashboardWorkspace';
+import type {DashboardTableId,TablePageSize} from '../domain/dashboardTablePreferences';
 import { moveDashboardSection, shiftDashboardSection } from '../domain/dashboardSectionOrdering';
 import { CsvExportButton } from '../components/AdvancedExploration';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel';
@@ -271,6 +272,10 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
     setPreviewDefinition(previous=>({...previous,analysis:{...previous.analysis,
       views:{...previous.analysis.views,[key]:value}}}));
   },[]);
+  const updateTablePageSize=useCallback((table:DashboardTableId,size:TablePageSize)=>{
+    setPreviewDefinition(previous=>({...previous,analysis:{...previous.analysis,
+      tablePageSizes:{...previous.analysis.tablePageSizes,[table]:size}}}));
+  },[]);
   const toggleFilterPanel=useCallback((visible:boolean)=>{
     setPreviewDefinition(previous=>({...previous,layout:{...previous.layout,filterPanelVisible:visible}}));
     if(!visible && (filters.sellerStates.length||filters.customerStates.length||filters.categories.length||
@@ -333,7 +338,8 @@ export function DashboardContent({dataset}: {dataset: DashboardDataset}) {
       filterPanelVisible={filterPanelVisible} onShowFilterPanel={()=>toggleFilterPanel(true)} />
     {!updating && metrics.distinctOrders === 0 ? <div className="empty-banner" role="status"><CircleAlert size={19} aria-hidden="true" /><span><strong>No matching orders.</strong> The filters above produce an empty cohort. Clear one filter or reset all to explore the historical records.</span><button type="button" onClick={()=>dispatch({type:'clear_all'})}>Clear all filters <ArrowUpRight size={14}/></button></div> : null}
     <DashboardSections key={workspace.activeDashboardId} definition={previewDefinition} dataset={dataset} cohort={cohort} contextCohort={contextCohort}
-      metrics={metrics} analyticalFilters={analyticalFilters} selectionFilters={filters} dispatch={dispatch} onChartViewChange={updateChartView}/>
+      metrics={metrics} analyticalFilters={analyticalFilters} selectionFilters={filters} dispatch={dispatch} onChartViewChange={updateChartView}
+      onTablePageSizeChange={updateTablePageSize}/>
     <CsvExportButton cohort={cohort}/>
     <DataFootnote dataset={dataset} />
   </>;

@@ -1,0 +1,91 @@
+/* OE-2: two standalone, workspace-managed operational modules; inherits theme tokens. */
+.operational-card {margin:17px 0; min-width:0;}
+.operational-body {min-width:0;}
+.operational-notice {margin:12px 0;padding:12px 14px;border:1px solid var(--stroke-strong);border-radius:9px;background:var(--panel-subtle);font-size:12px;line-height:1.6;color:var(--text);}
+.operational-summary {display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.operational-summary strong {color:var(--heading);font-size:15px;}
+.operational-summary span {color:var(--muted);font-size:12px;}
+.lifecycle-rows {display:grid;gap:18px;margin:18px 0;}
+.lifecycle-row {min-width:0;}
+.lifecycle-row-header {display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px;}
+.lifecycle-row-header strong {font-size:12px;color:var(--heading);}
+.lifecycle-row-header span {font-size:11px;color:var(--muted);}
+.lifecycle-track {height:18px;width:100%;position:relative;border-radius:6px;background:var(--panel-subtle);overflow:hidden;border:1px solid var(--stroke);}
+.lifecycle-p95,.lifecycle-median {height:100%;position:absolute;top:0;left:0;}
+.lifecycle-p95 {background:var(--accent);opacity:.25;}
+.lifecycle-median {background:var(--accent);opacity:.85;}
+.lifecycle-unavailable {background:var(--panel-subtle);border:1px dashed var(--stroke);border-radius:6px;color:var(--muted);font-size:11px;padding:9px 12px;}
+.lifecycle-statline {display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:7px;}
+.operational-legend {display:flex;gap:18px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:14px 0;}
+.operational-legend span {display:inline-flex;align-items:center;gap:7px;}
+.operational-legend i {width:14px;height:9px;display:inline-block;border-radius:2px;background:var(--accent);}
+.operational-legend-p95 {opacity:.28;}
+.corridor-controls {display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;}
+.corridor-controls label {display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);}
+.corridor-controls input,.corridor-controls select {background:var(--panel-subtle);color:var(--heading);border:1px solid var(--stroke-strong);border-radius:7px;padding:9px 10px;max-width:100%;font-size:12px;}
+.corridor-table-wrap {overflow-x:auto;max-width:100%;border:1px solid var(--stroke);border-radius:10px;}
+.corridor-table {border-collapse:collapse;min-width:870px;width:100%;text-align:right;font-size:12px;color:var(--text);}
+.corridor-table th,.corridor-table td {padding:12px 9px;border-bottom:1px solid var(--stroke);white-space:nowrap;}
+.corridor-table tr:last-child th,.corridor-table tr:last-child td {border-bottom:0;}
+.corridor-table th:first-child,.corridor-table td:first-child {text-align:left;}
+.corridor-table thead {background:var(--panel-subtle);}
+.corridor-table thead th {font-size:11px;font-weight:700;color:var(--heading);}
+.corridor-table thead button {font-size:11px;display:inline-flex;align-items:center;gap:4px;color:inherit;cursor:pointer;}
+.corridor-table td small {display:block;color:var(--muted);font-size:10px;}
+.corridor-table tbody tr:hover {background:var(--panel-subtle);}
+.corridor-table .corridor-focused {box-shadow:inset 3px 0 0 var(--accent);}
+.corridor-focus {background:var(--panel-subtle);border:1px solid var(--stroke-strong);border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;white-space:nowrap;}
+.corridor-focus:hover:not(:disabled) {border-color:var(--accent);color:var(--heading);}
+.corridor-focus:disabled {opacity:.5;cursor:not-allowed;}
+.corridor-pagination {display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0;color:var(--muted);font-size:11px;}
+.corridor-pagination button {padding:7px 10px;border:1px solid var(--stroke);border-radius:6px;color:var(--heading);}
+.corridor-pagination button:disabled {opacity:.35;cursor:not-allowed;}
+@media(max-width:650px){.corridor-controls label {width:100%;justify-content:space-between;}.corridor-controls input {flex:1;min-width:0;}.corridor-pagination{justify-content:flex-start;}}
+
+/* Seller-associated outcomes: no row-level source exports or fragile long-ID overflow. */
+.seller-performance .seller-table{min-width:1210px;}
+.seller-performance .seller-table td button{border:1px solid var(--stroke-strong);border-radius:6px;padding:6px 9px;color:var(--heading);background:var(--panel-subtle);}
+.seller-performance .seller-table td button:hover{border-color:var(--accent);}
+.seller-id{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--heading);}
+.seller-scatter-wrap{margin:12px 0 20px;border:1px solid var(--stroke);border-radius:10px;padding:12px;background:var(--panel-subtle);}
+.seller-scatter{width:100%;height:auto;max-height:260px;display:block;overflow:visible;}
+.seller-scatter-grid{stroke:var(--stroke-strong);stroke-dasharray:3 4;stroke-width:1;}
+.seller-scatter-axis{stroke:var(--muted);stroke-width:1;}
+.seller-scatter-label{fill:var(--muted);font-size:10px;}
+.seller-scatter-point{fill:var(--accent);opacity:.72;stroke:var(--panel);stroke-width:.5;}
+.seller-scatter-unavailable{padding:14px;border:1px dashed var(--stroke-strong);border-radius:8px;color:var(--muted);font-size:12px;}
+.seller-detail{padding:16px;border:1px solid var(--stroke-strong);border-radius:10px;background:var(--panel-subtle);font-size:12px;color:var(--text);overflow-wrap:anywhere;}
+.seller-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+.seller-detail-heading strong{color:var(--heading);}
+.seller-detail-heading button{padding:7px 10px;border:1px solid var(--stroke-strong);border-radius:6px;}
+.seller-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px;}
+.seller-detail-grid strong{color:var(--heading);}
+.seller-detail-grid ul{padding-left:20px;margin:7px 0 0;line-height:1.8;}
+@media(max-width:650px){.seller-detail-grid{grid-template-columns:1fr;}}
+
+/* OE-4: privacy-preserving customer satisfaction, responsive score distribution. */
+.customer-experience .customer-review-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:18px 0 24px;}
+.customer-review-grid section {min-width:0;border:1px solid var(--stroke);border-radius:9px;padding:14px;}
+.customer-review-grid h4,.customer-segments h4 {font-size:14px;font-weight:700;color:var(--heading);margin:0 0 9px;}
+.customer-rating-row {display:grid;grid-template-columns:42px minmax(0,1fr) 60px;align-items:center;gap:9px;margin:11px 0;font-size:12px;color:var(--text);}
+.customer-rating-row strong {text-align:right;font-variant-numeric:tabular-nums;}
+.customer-rating-track {height:12px;background:var(--panel-subtle);border-radius:5px;overflow:hidden;border:1px solid var(--stroke);}
+.customer-rating-track>div {height:100%;background:var(--accent);min-width:0;}
+.customer-outcome-table {width:100%;border-collapse:collapse;font-size:12px;}
+.customer-outcome-table th,.customer-outcome-table td {border-bottom:1px solid var(--stroke);padding:9px 5px;text-align:right;}
+.customer-outcome-table th:first-child {text-align:left;}
+.customer-outcome-table thead th {color:var(--muted);font-size:11px;}
+.customer-segment-controls {display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0;}
+.customer-segment-controls>div {display:flex;gap:5px;flex-wrap:wrap;}
+.customer-segment-controls button {border:1px solid var(--stroke);padding:8px 10px;border-radius:6px;font-size:11px;}
+.customer-segment-controls button[aria-pressed=true] {border-color:var(--accent);color:var(--heading);background:var(--panel-subtle);}
+.customer-segment-controls label {display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);}
+.customer-segment-controls input,.customer-segment-controls select {background:var(--panel-subtle);border:1px solid var(--stroke-strong);border-radius:7px;padding:8px 10px;color:var(--heading);font-size:12px;max-width:180px;}
+.customer-segment-table {min-width:680px;}
+@media(max-width:760px){.customer-experience .customer-review-grid{grid-template-columns:1fr;}.customer-segment-controls label {width:100%;justify-content:space-between;}.customer-segment-controls input {flex:1;max-width:none;}}
+
+/* Compact, keyboard-accessible per-table pagination preferences. */
+.table-page-size-control{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;color:var(--muted);font-size:11px;}
+.table-page-size-control select{border:1px solid var(--stroke);border-radius:6px;background:var(--panel);color:var(--heading);padding:5px 7px;min-width:66px;}
+.table-page-size-control select:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.order-pagination{flex-wrap:wrap;}

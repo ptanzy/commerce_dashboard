@@ -29,6 +29,7 @@ export function workspaceDraft(definition: DashboardDefinition, filters: Filters
         geographic: {...definition.analysis.views.geographic}, sankey: {...definition.analysis.views.sankey},
         trends: {...definition.analysis.views.trends}, category: {...definition.analysis.views.category},
       },
+      tablePageSizes: {...definition.analysis.tablePageSizes},
     },
   };
 }

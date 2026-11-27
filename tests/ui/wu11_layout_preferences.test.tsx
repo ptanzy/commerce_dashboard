@@ -77,7 +77,7 @@ describe('WU-11 Phase 4 section ordering and view preference restoration',()=>{
     expectSelected('Sankey measurement','Freight charged');
     expectSelected('Monthly trend metric','On-time rate');
     expectSelected('Category ranking measurement','Item value');
-  });
+  }, 15_000); // Full-dashboard persistence integration renders ten panels twice.
 
   it('discard reverts unsaved chart preferences and ordering on a named dashboard',()=>{
     render(<DashboardContent dataset={dataset}/>);
